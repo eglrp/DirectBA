@@ -29,8 +29,10 @@ using namespace cv;
 using namespace std;
 
 void makeDir(char *Fname);
+int IsFileExist(char *Fname, bool silient = true);
 
 int readCalibInfo(char *BAfileName, Corpus &CorpusData);
+int ReadVideoDataI(char *Path, VideoData &vInfo, int viewID, int startTime, int stopTime, double threshold = 3, int ninliersThresh = 40, int silent = 1);
 
 void ReadDepthFile(char *Path, ImgData &imdat, int i);
 int ReadSynthFile(char *Path, Corpus &CorpusData, int SynthID = 0);
@@ -76,6 +78,8 @@ template <class myType> bool ReadGridBinary(char *fn, myType *data, int width, i
 
 bool WriteGridToImage(char *fname, unsigned char *Img, int width, int height, int nchannels);
 bool WriteGridToImage(char *fname, double *Img, int width, int height, int nchannels);
+
+bool ReadFlowDataBinary(char *fnX, char *fnY, Point2f *fxy, int width, int height);
 
 int  read_pfm_file(const std::string& filename, ImgData &depthmap);
 cv::Mat read_pfm_file(const std::string& filename);

@@ -464,6 +464,31 @@ void AssembleP(double *K, double *RT, double *P)
 	return;
 }
 
+void ConvertFrontoDepth2LineOfSightDepth(ImgData &Img, CameraData &Cam)
+{
+	int width = Img.width, height = Img.height;
+
+	getRfromr(Cam.rt, Cam.R);
+	double rayDir[3], opticalAxis[3], ij[3] = { Cam.intrinsic[3], Cam.intrinsic[4], 1 };
+	getRayDir(opticalAxis, Cam.invK, Cam.R, ij);
+	double normOptical = sqrt(pow(opticalAxis[0], 2) + pow(opticalAxis[1], 2) +pow(opticalAxis[2], 2));
+
+	for (int jj = 0; jj < height; jj++)
+	{
+		for (int ii = 0; ii < width; ii++)
+		{
+			double ij[3] = { ii, jj, 1 };
+			getRayDir(rayDir, Cam.invK, Cam.R, ij);
+			double cos = (rayDir[0] * opticalAxis[0] + rayDir[1] * opticalAxis[1] + rayDir[2] * opticalAxis[2]) /
+				sqrt(pow(rayDir[0], 2) + pow(rayDir[1], 2) + pow(rayDir[2], 2)) / normOptical;
+			double fronto_d = Img.depth[ii + jj*width];
+			if (fronto_d < 0)
+				Img.depth[ii + jj*width] = 0;
+			else
+				Img.depth[ii + jj*width] = fronto_d / cos;
+		}
+	}
+}
 void ConvertDisparirty2DepthMap(ImgData &Img, double f, double b, double doffs)
 {
 	for (int jj = 0; jj < Img.height; jj++)

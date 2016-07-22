@@ -13,6 +13,21 @@ void makeDir(char *Fname)
 #endif
 	return;
 }
+int IsFileExist(char *Fname, bool silient)
+{
+	std::ifstream test(Fname);
+	if (test.is_open())
+	{
+		test.close();
+		return 1;
+	}
+	else
+	{
+		if (!silient)
+			printf("Cannot load %s\n", Fname);
+		return 0;
+	}
+}
 int freadi(FILE * fIn)
 {
 	int iTemp;
@@ -138,7 +153,181 @@ int readCalibInfo(char *BAfileName, Corpus &CorpusData)
 
 	return 0;
 }
+int ReadVideoDataI(char *Path, VideoData &vInfo, int viewID, int startTime, int stopTime, double threshold, int ninliersThresh, int silent)
+{
+	char Fname[200];
+	int frameID, LensType, ShutterModel, width, height;
+	if (startTime == -1 && stopTime == -1)
+		startTime = 0, stopTime = 10000;
+	int maxFrameOffset = vInfo.maxFrameOffset, nframes = stopTime + maxFrameOffset + 1;
 
+	vInfo.nframesI = nframes;
+	vInfo.startTime = startTime;
+	vInfo.stopTime = stopTime;
+	vInfo.VideoInfo = new CameraData[nframes];
+	for (int ii = 0; ii < nframes; ii++)
+	{
+		vInfo.VideoInfo[ii].valid = false;
+		vInfo.VideoInfo[ii].threshold = threshold;
+	}
+
+	//READ INTRINSIC: START
+	int validFrame = 0;
+	sprintf(Fname, "%s/vHIntrinsic_%d.txt", Path, viewID);
+	if (IsFileExist(Fname) == 0)
+	{
+		sprintf(Fname, "%s/avIntrinsic_%d.txt", Path, viewID);
+		if (IsFileExist(Fname) == 0)
+		{
+			//printf("Cannot find %s...", Fname);
+			sprintf(Fname, "%s/vIntrinsic_%d.txt", Path, viewID);
+			if (IsFileExist(Fname) == 0)
+			{
+				//printf("Cannot find %s...", Fname);
+				sprintf(Fname, "%s/Intrinsic_%d.txt", Path, viewID);
+				if (IsFileExist(Fname) == 0)
+				{
+					printf("Cannot find %s...\n", Fname);
+					return 1;
+				}
+			}
+		}
+	}
+	FILE *fp = fopen(Fname, "r");
+	if (silent == 0)
+		printf("Loaded %s\n", Fname);
+	double fx, fy, skew, u0, v0, r0, r1, r2, t0, t1, p0, p1, omega, DistCtrX, DistCtrY;
+	while (fscanf(fp, "%d %d %d %d %d %lf %lf %lf %lf %lf ", &frameID, &LensType, &ShutterModel, &width, &height, &fx, &fy, &skew, &u0, &v0) != EOF)
+	{
+		if (frameID >= startTime - maxFrameOffset && frameID <= stopTime + maxFrameOffset)
+		{
+			vInfo.VideoInfo[frameID].intrinsic[0] = fx, vInfo.VideoInfo[frameID].intrinsic[1] = fy, vInfo.VideoInfo[frameID].intrinsic[2] = skew,
+				vInfo.VideoInfo[frameID].intrinsic[3] = u0, vInfo.VideoInfo[frameID].intrinsic[4] = v0;
+
+			GetKFromIntrinsic(vInfo.VideoInfo[frameID].K, vInfo.VideoInfo[frameID].intrinsic);
+			mat_invert(vInfo.VideoInfo[frameID].K, vInfo.VideoInfo[frameID].invK);
+
+			vInfo.VideoInfo[frameID].LensModel = LensType, vInfo.VideoInfo[frameID].ShutterModel = ShutterModel, vInfo.VideoInfo[frameID].threshold = threshold, vInfo.VideoInfo[frameID].ninlierThresh = ninliersThresh;
+			vInfo.VideoInfo[frameID].hasIntrinsicExtrinisc++;
+			validFrame = frameID;
+		}
+
+		if (LensType == 0)
+		{
+			fscanf(fp, "%lf %lf %lf %lf %lf %lf %lf ", &r0, &r1, &r2, &t0, &t1, &p0, &p1);
+			if (frameID >= startTime - maxFrameOffset && frameID <= stopTime + maxFrameOffset)
+			{
+				vInfo.VideoInfo[frameID].distortion[0] = r0, vInfo.VideoInfo[frameID].distortion[1] = r1, vInfo.VideoInfo[frameID].distortion[2] = r2;
+				vInfo.VideoInfo[frameID].distortion[3] = t0, vInfo.VideoInfo[frameID].distortion[4] = t1;
+				vInfo.VideoInfo[frameID].distortion[5] = p0, vInfo.VideoInfo[frameID].distortion[6] = p1;
+			}
+		}
+		else
+		{
+			fscanf(fp, "%lf %lf %lf ", &omega, &DistCtrX, &DistCtrY);
+			if (frameID >= startTime - maxFrameOffset && frameID <= stopTime + maxFrameOffset)
+				vInfo.VideoInfo[frameID].distortion[0] = omega, vInfo.VideoInfo[frameID].distortion[1] = DistCtrX, vInfo.VideoInfo[frameID].distortion[2] = DistCtrY;
+		}
+		if (frameID >= startTime - maxFrameOffset && frameID <= stopTime + maxFrameOffset)
+			vInfo.VideoInfo[frameID].width = width, vInfo.VideoInfo[frameID].height = height;
+	}
+	fclose(fp);
+	//END
+
+	//READ POSE FROM VIDEO POSE: START
+	if (vInfo.VideoInfo[validFrame].ShutterModel == 0)
+	{
+		sprintf(Fname, "%s/vHCamPose_%d.txt", Path, viewID);
+		if (IsFileExist(Fname) == 0)
+		{
+			sprintf(Fname, "%s/avCamPose_%d.txt", Path, viewID);
+			if (IsFileExist(Fname) == 0)
+			{
+				//printf("Cannot find %s...", Fname);
+				sprintf(Fname, "%s/vCamPose_%d.txt", Path, viewID);
+				if (IsFileExist(Fname) == 0)
+				{
+					//printf("Cannot find %s...", Fname);
+					sprintf(Fname, "%s/CamPose_%d.txt", Path, viewID);
+					if (IsFileExist(Fname) == 0)
+					{
+						printf("Cannot find %s...\n", Fname);
+						return 1;
+					}
+				}
+			}
+		}
+	}
+	else if (vInfo.VideoInfo[validFrame].ShutterModel == 1)
+	{
+		sprintf(Fname, "%s/vHCamPose_RSCayley_%d.txt", Path, viewID);
+		if (IsFileExist(Fname) == 0)
+		{
+			sprintf(Fname, "%s/avCamPose_RSCayley_%d.txt", Path, viewID);
+			if (IsFileExist(Fname) == 0)
+			{
+				//printf("Cannot find %s...", Fname);
+				sprintf(Fname, "%s/vCamPose_RSCayley_%d.txt", Path, viewID);
+				if (IsFileExist(Fname) == 0)
+				{
+					//printf("Cannot find %s...", Fname);
+					sprintf(Fname, "%s/CamPose_%d.txt", Path, viewID);
+					if (IsFileExist(Fname) == 0)
+					{
+						printf("Cannot find %s...\n", Fname);
+						return 1;
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		sprintf(Fname, "%s/CamPose_Spline_%d.txt", Path, viewID);
+		if (IsFileExist(Fname) == 0)
+		{
+			printf("Cannot find %s...", Fname);
+			return 1;
+		}
+	}
+	fp = fopen(Fname, "r");
+	if (silent == 0)
+		printf("Loaded %s\n", Fname);
+	double rt[6], wt[6];
+	while (fscanf(fp, "%d %lf %lf %lf %lf %lf %lf ", &frameID, &rt[0], &rt[1], &rt[2], &rt[3], &rt[4], &rt[5]) != EOF)
+	{
+		if (vInfo.VideoInfo[validFrame].ShutterModel == 1)
+			for (int jj = 0; jj < 6; jj++)
+				fscanf(fp, "%lf ", &wt[jj]);
+
+		if (frameID >= startTime - maxFrameOffset && frameID <= stopTime + maxFrameOffset)
+		{
+			if (vInfo.VideoInfo[frameID].hasIntrinsicExtrinisc < 1 || abs(rt[3]) + abs(rt[4]) + abs(rt[5]) < 0.001)
+			{
+				vInfo.VideoInfo[frameID].valid = false;
+				continue;
+			}
+
+			if (vInfo.VideoInfo[frameID].hasIntrinsicExtrinisc > 0)
+				vInfo.VideoInfo[frameID].valid = true;
+
+			for (int jj = 0; jj < 6; jj++)
+				vInfo.VideoInfo[frameID].rt[jj] = rt[jj];
+			GetRTFromrt(vInfo.VideoInfo[frameID].rt, vInfo.VideoInfo[frameID].R, vInfo.VideoInfo[frameID].T);
+			GetCfromT(vInfo.VideoInfo[frameID].R, vInfo.VideoInfo[frameID].T, vInfo.VideoInfo[frameID].C);
+
+			if (vInfo.VideoInfo[frameID].ShutterModel == 1)
+				for (int jj = 0; jj < 6; jj++)
+					vInfo.VideoInfo[frameID].wt[jj] = wt[jj];
+
+			AssembleP(vInfo.VideoInfo[frameID].K, vInfo.VideoInfo[frameID].R, vInfo.VideoInfo[frameID].T, vInfo.VideoInfo[frameID].P);
+		}
+	}
+	fclose(fp);
+	//READ FROM VIDEO POSE: END
+
+	return 0;
+}
 void ReadDepthFile(char *Path, ImgData &imdat, int i)
 {
 	char Fname[MAX_STRING_SIZE];
@@ -212,48 +401,48 @@ int ReadSynthFile(char *Path, Corpus &CorpusData, int SynthID)
 			fscanf(fp, "%lf ", &CorpusData.camera[i].T[ii]);
 	}
 
-	CorpusData.xyz.reserve(CorpusData.n3dPoints);
+	/*CorpusData.xyz.reserve(CorpusData.n3dPoints);
 	CorpusData.rgb.reserve(CorpusData.n3dPoints);
 
 	for (int i = 0; i < CorpusData.n3dPoints; i++)
 	{
-		Point3d xyz;
-		if (fscanf(fp, "%lf %lf %lf", &xyz.x, &xyz.y, &xyz.z) != 3)
-			return 1;
-		CorpusData.xyz.push_back(xyz);
+	Point3d xyz;
+	if (fscanf(fp, "%lf %lf %lf", &xyz.x, &xyz.y, &xyz.z) != 3)
+	return 1;
+	CorpusData.xyz.push_back(xyz);
 
-		Point3i rgb;
-		if (fscanf(fp, "%d %d %d", &rgb.x, &rgb.y, &rgb.z) != 3)
-			return 1;
-		CorpusData.rgb.push_back(rgb);
+	Point3i rgb;
+	if (fscanf(fp, "%d %d %d", &rgb.x, &rgb.y, &rgb.z) != 3)
+	return 1;
+	CorpusData.rgb.push_back(rgb);
 
-		int numMatches = 0;
-		if (fscanf(fp, "%d", &numMatches) != 1)
-			return 1;
+	int numMatches = 0;
+	if (fscanf(fp, "%d", &numMatches) != 1)
+	return 1;
 
-		CorpusData.nEleAll3D.push_back(numMatches);
-		int* viewIdPer3D = new int[numMatches]; //3D -> visiable views index
-		int* pointIdPer3D = new int[numMatches]; //3D -> 2D index in those visible views
-		Point2f*  uvPer3D = new Point2f[numMatches]; //3D -> uv of that point in those visible views
-		float *scalePer3D = new float[numMatches]; //3D -> scale of that point in those visible views
+	CorpusData.nEleAll3D.push_back(numMatches);
+	int* viewIdPer3D = new int[numMatches]; //3D -> visiable views index
+	int* pointIdPer3D = new int[numMatches]; //3D -> 2D index in those visible views
+	Point2f*  uvPer3D = new Point2f[numMatches]; //3D -> uv of that point in those visible views
+	float *scalePer3D = new float[numMatches]; //3D -> scale of that point in those visible views
 
-		for (int j = 0; j < numMatches; j++)
-		{
-			int imgId, featureId;
-			float scl;
-			if (fscanf(fp, "%d %d %f", &imgId, &featureId, &scl) != 3)
-				return 1;
+	for (int j = 0; j < numMatches; j++)
+	{
+	int imgId, featureId;
+	float scl;
+	if (fscanf(fp, "%d %d %f", &imgId, &featureId, &scl) != 3)
+	return 1;
 
-			viewIdPer3D[j] = imgId;
-			pointIdPer3D[j] = featureId;
-			scalePer3D[j] = scl;
-		}
-		CorpusData.viewIdAll3D.push_back(viewIdPer3D);
-		CorpusData.pointIdAll3D.push_back(pointIdPer3D);
-		CorpusData.scaleAll3D.push_back(scalePer3D);
-		CorpusData.uvAll3D.push_back(uvPer3D);
+	viewIdPer3D[j] = imgId;
+	pointIdPer3D[j] = featureId;
+	scalePer3D[j] = scl;
+	}
+	CorpusData.viewIdAll3D.push_back(viewIdPer3D);
+	CorpusData.pointIdAll3D.push_back(pointIdPer3D);
+	CorpusData.scaleAll3D.push_back(scalePer3D);
+	CorpusData.uvAll3D.push_back(uvPer3D);
 	} // for i
-	fclose(fp);
+	fclose(fp);*/
 
 	int width = 1920, height = 1080;
 	for (int i = 0; i < CorpusData.nCameras; i++)
@@ -264,6 +453,7 @@ int ReadSynthFile(char *Path, Corpus &CorpusData, int SynthID)
 		CorpusData.camera[i].intrinsic[3] = width / 2, CorpusData.camera[i].intrinsic[4] = height / 2;
 
 		GetKFromIntrinsic(CorpusData.camera[i].K, CorpusData.camera[i].intrinsic);
+		GetiK(CorpusData.camera[i].invK, CorpusData.camera[i].K);
 		mat_invert(CorpusData.camera[i].K, CorpusData.camera[i].invK, 3);
 		GetrtFromRT(CorpusData.camera[i].rt, CorpusData.camera[i].R, CorpusData.camera[i].T);
 		GetCfromT(CorpusData.camera[i].R, CorpusData.camera[i].T, CorpusData.camera[i].C);
@@ -367,6 +557,41 @@ bool WriteGridToImage(char *fname, double *Img, int width, int height, int nchan
 				M.data[nchannels*ii + kk + nchannels*jj*width] = (unsigned char)(int)(Img[ii + jj*width + kk*length] + 0.5);
 
 	return imwrite(fname, M);
+}
+
+bool ReadFlowDataBinary(char *fnX, char *fnY, Point2f *fxy, int width, int height)
+{
+	float u, v;
+
+	ifstream fin1, fin2;
+	fin1.open(fnX, ios::binary);
+	if (!fin1.is_open())
+	{
+		cout << "Cannot load: " << fnX << endl;
+		return false;
+	}
+	fin2.open(fnY, ios::binary);
+	if (!fin2.is_open())
+	{
+		cout << "Cannot load: " << fnY << endl;
+		return false;
+	}
+
+	for (int j = 0; j < height; ++j)
+	{
+		for (int i = 0; i < width; ++i)
+		{
+			fin1.read(reinterpret_cast<char *>(&u), sizeof(float));
+			fin2.read(reinterpret_cast<char *>(&v), sizeof(float));
+
+			fxy[i + j*width].x = u;
+			fxy[i + j*width].y = v;
+		}
+	}
+	fin1.close();
+	fin2.close();
+
+	return true;
 }
 
 int  read_pfm_file(const std::string& filename, ImgData &depthmap)

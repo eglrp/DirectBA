@@ -50,11 +50,11 @@ struct CameraData
 };
 struct DirectAlignPara
 {
-	DirectAlignPara(double dataWeight = 0.8, double regIntraWeight = 0.2, double regInterWeight = 0.2, double colorSigma = 5.0, double depthSigma = 2.0, double gradientThresh2 = 100) :
-		dataWeight(dataWeight), regIntraWeight(regIntraWeight), regInterWeight(regInterWeight), colorSigma(colorSigma), depthSigma(depthSigma), gradientThresh2(gradientThresh2){}
+	DirectAlignPara(double dataWeight = 0.8, double regIntraWeight = 0.2, double regInterWeight = 0.2, double colorSigma = 5.0, double depthSigma = 2.0, double gradientThresh2 = 100, double reProjectionSigma = 0.5) :
+		dataWeight(dataWeight), regIntraWeight(regIntraWeight), regInterWeight(regInterWeight), colorSigma(colorSigma), depthSigma(depthSigma), gradientThresh2(gradientThresh2), reProjectionSigma(reProjectionSigma){}
 
 	double dataWeight, regIntraWeight, regInterWeight;
-	double colorSigma, depthSigma; //expected std of variables (grayscale, mm);
+	double colorSigma, depthSigma, reProjectionSigma; //expected std of variables (grayscale, mm);
 	double gradientThresh2;
 };
 struct Corpus
@@ -71,5 +71,13 @@ struct Corpus
 	vector<Point2f*>  uvAll3D; //3D -> uv of that point in those visible views
 	vector<float*> scaleAll3D; //3D -> scale of that point in those visible views
 };
-
+struct VideoData
+{
+	VideoData()
+	{
+		maxFrameOffset = 0;
+	}
+	int nVideos, startTime, stopTime, nframesI, maxFrameOffset;
+	CameraData *VideoInfo;
+};
 #endif 

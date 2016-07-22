@@ -180,6 +180,7 @@ void DesembleRT(double *R, double *T, double *RT);
 void AssembleP(double *K, double *R, double *T, double *P);
 void AssembleP(double *K, double *RT, double *P);
 
+void ConvertFrontoDepth2LineOfSightDepth(ImgData &Img, CameraData &Cam);
 void ConvertDisparirty2DepthMap(ImgData &Img, double f, double b, double doffs);
 
 #endif
