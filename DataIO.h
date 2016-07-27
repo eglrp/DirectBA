@@ -34,7 +34,10 @@ int IsFileExist(char *Fname, bool silient = true);
 int readCalibInfo(char *BAfileName, Corpus &CorpusData);
 int ReadVideoDataI(char *Path, VideoData &vInfo, int viewID, int startTime, int stopTime, double threshold = 3, int ninliersThresh = 40, int silent = 1);
 
-void ReadDepthFile(char *Path, ImgData &imdat, int i);
+void ReadSudiptaDepth(char *Path, ImgData &imdat, int i);
+bool WriteInvDepthToImage(char *Fname, ImgData &imdat);
+bool WriteInvDepthToImage(char *Fname, float *depth, int width, int height, double minDepth, double maxDepth);
+
 int ReadSynthFile(char *Path, Corpus &CorpusData, int SynthID = 0);
 int WriteSynthFile(char *Path, Corpus &CorpusData, int SynthID = 0);
 

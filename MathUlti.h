@@ -181,6 +181,7 @@ void AssembleP(double *K, double *R, double *T, double *P);
 void AssembleP(double *K, double *RT, double *P);
 
 void ConvertFrontoDepth2LineOfSightDepth(ImgData &Img, CameraData &Cam);
+void ConvertLineOfSightDepth2FrontoDepth(ImgData &Img, CameraData &Cam);
 void ConvertDisparirty2DepthMap(ImgData &Img, double f, double b, double doffs);
 
 #endif

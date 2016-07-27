@@ -14,7 +14,7 @@ using namespace std;
 typedef unsigned char uchar;
 struct ImgData
 {
-	int width, height, nchannels;
+	int width, height, nchannels, frameID;
 	//Also placeholder for dispairty, which will be converted later.
 	float *depth;
 	int *depthConf;
@@ -22,6 +22,11 @@ struct ImgData
 	vector<Mat> imgPyr;
 	vector<float *> depthPyr;
 	vector<double> scaleFactor;
+};
+struct SparseFlowData
+{
+	Point2f *flow;
+	int nimages, nfeatures;
 };
 struct CameraData
 {

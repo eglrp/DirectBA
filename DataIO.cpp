@@ -328,7 +328,7 @@ int ReadVideoDataI(char *Path, VideoData &vInfo, int viewID, int startTime, int 
 
 	return 0;
 }
-void ReadDepthFile(char *Path, ImgData &imdat, int i)
+void ReadSudiptaDepth(char *Path, ImgData &imdat, int i)
 {
 	char Fname[MAX_STRING_SIZE];
 
@@ -366,6 +366,29 @@ void ReadDepthFile(char *Path, ImgData &imdat, int i)
 	printf("done.\n");
 
 	return;
+}
+bool WriteInvDepthToImage(char *Fname, ImgData &imdat)
+{
+	int ii, jj, width = imdat.width, height = imdat.height;
+
+	Mat M = Mat::zeros(height, width, CV_8UC1);
+	for (jj = 0; jj < height; jj++)
+		for (ii = 0; ii < width; ii++)
+			M.data[ii + jj*width] = (unsigned char)(int)(imdat.depth[ii + jj*width] * 255.0 + 0.5);
+
+	return imwrite(Fname, M);
+}
+bool WriteInvDepthToImage(char *Fname, float *depth, int width, int height, double minDepth, double maxDepth)
+{
+	int ii, jj;
+
+	Mat M = Mat::zeros(height, width, CV_8UC1);
+	for (jj = 0; jj < height; jj++)
+		for (ii = 0; ii < width; ii++)
+			M.data[ii + jj*width] = (unsigned char)(int)(255.0 / (abs(depth[ii + jj*width]) -minDepth)/(maxDepth-minDepth)+ 0.5);
+
+	return imwrite(Fname, M);
+
 }
 int ReadSynthFile(char *Path, Corpus &CorpusData, int SynthID)
 {
