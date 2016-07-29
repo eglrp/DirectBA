@@ -52,8 +52,43 @@ void normalize(double *x, int dim);
 void mat_invert(double* mat, double* imat, int dims = 3);
 void mat_invert(float* mat, float* imat, int dims = 3);
 void mat_mul(float *aa, float *bb, float *out, int rowa, int col_row, int colb);
-void mat_mul(double *aa, double *bb, double *out, int rowa, int col_row, int colb);
+template <class T>void mat_mul(T *aa, T *bb, T *out, int rowa, int col_row, int colb)
+{
+	int ii, jj, kk;
+	for (ii = 0; ii < rowa*colb; ii++)
+		out[ii] = T(0);
+
+	for (ii = 0; ii < rowa; ii++)
+	{
+		for (jj = 0; jj < colb; jj++)
+		{
+			for (kk = 0; kk < col_row; kk++)
+				out[ii*colb + jj] += aa[ii*col_row + kk] * bb[kk*colb + jj];
+		}
+	}
+
+	return;
+}
+
 void mat_transpose(double *in, double *out, int row_in, int col_in);
+
+template <class T> double MeanArray(vector<T>&data)
+{
+	double mean = 0.0;
+	for (int ii = 0; ii < data.size(); ii++)
+		mean += (T)data[ii];
+	return mean / data.size();
+}
+template <class T>  double VarianceArray(vector<T>&data, T mean)
+{
+	if (mean == NULL)
+		mean = MeanArray(data);
+
+	double var = 0.0;
+	for (int ii = 0; ii < data.size(); ii++)
+		var += pow((T)data[ii] - mean, 2);
+	return var / (data.size() - 1);
+}
 
 void Quick_Sort_Double(double * A, int *B, int low, int high);
 void Quick_Sort_Float(float * A, int *B, int low, int high);

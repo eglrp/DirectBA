@@ -237,22 +237,26 @@ int ReadVideoDataI(char *Path, VideoData &vInfo, int viewID, int startTime, int 
 	//READ POSE FROM VIDEO POSE: START
 	if (vInfo.VideoInfo[validFrame].ShutterModel == 0)
 	{
-		sprintf(Fname, "%s/vHCamPose_%d.txt", Path, viewID);
+		sprintf(Fname, "%s/sb_CamPose_%d.txt", Path, viewID);
 		if (IsFileExist(Fname) == 0)
 		{
-			sprintf(Fname, "%s/avCamPose_%d.txt", Path, viewID);
+			sprintf(Fname, "%s/vHCamPose_%d.txt", Path, viewID);
 			if (IsFileExist(Fname) == 0)
 			{
-				//printf("Cannot find %s...", Fname);
-				sprintf(Fname, "%s/vCamPose_%d.txt", Path, viewID);
+				sprintf(Fname, "%s/avCamPose_%d.txt", Path, viewID);
 				if (IsFileExist(Fname) == 0)
 				{
 					//printf("Cannot find %s...", Fname);
-					sprintf(Fname, "%s/CamPose_%d.txt", Path, viewID);
+					sprintf(Fname, "%s/vCamPose_%d.txt", Path, viewID);
 					if (IsFileExist(Fname) == 0)
 					{
-						printf("Cannot find %s...\n", Fname);
-						return 1;
+						//printf("Cannot find %s...", Fname);
+						sprintf(Fname, "%s/CamPose_%d.txt", Path, viewID);
+						if (IsFileExist(Fname) == 0)
+						{
+							printf("Cannot find %s...\n", Fname);
+							return 1;
+						}
 					}
 				}
 			}

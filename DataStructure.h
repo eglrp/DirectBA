@@ -55,12 +55,13 @@ struct CameraData
 };
 struct DirectAlignPara
 {
-	DirectAlignPara(double dataWeight = 0.8, double regIntraWeight = 0.2, double regInterWeight = 0.2, double colorSigma = 5.0, double depthSigma = 2.0, double gradientThresh2 = 100, double reProjectionSigma = 0.5) :
-		dataWeight(dataWeight), regIntraWeight(regIntraWeight), regInterWeight(regInterWeight), colorSigma(colorSigma), depthSigma(depthSigma), gradientThresh2(gradientThresh2), reProjectionSigma(reProjectionSigma){}
+	DirectAlignPara(double dataWeight = 0.8, double regIntraWeight = 0.2, double regInterWeight = 0.2, double colorSigma = 5.0, double depthSigma = 2.0, double gradientThresh2 = 100, double lowDepth = 0.5, double highDepth = 10, double reProjectionSigma = 0.5) :
+		dataWeight(dataWeight), regIntraWeight(regIntraWeight), regInterWeight(regInterWeight), colorSigma(colorSigma), depthSigma(depthSigma), gradientThresh2(gradientThresh2), lowDepth(lowDepth), highDepth(highDepth), reProjectionSigma(reProjectionSigma){}
 
 	double dataWeight, regIntraWeight, regInterWeight;
 	double colorSigma, depthSigma, reProjectionSigma; //expected std of variables (grayscale, mm);
 	double gradientThresh2;
+	double lowDepth, highDepth;
 };
 struct Corpus
 {

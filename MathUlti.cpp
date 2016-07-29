@@ -105,40 +105,7 @@ void mat_invert(float* mat, float* imat, int dims)
 
 	return;
 }
-void mat_mul(float *aa, float *bb, float *out, int rowa, int col_row, int colb)
-{
-	int ii, jj, kk;
-	for (ii = 0; ii < rowa*colb; ii++)
-		out[ii] = 0;
 
-	for (ii = 0; ii < rowa; ii++)
-	{
-		for (jj = 0; jj < colb; jj++)
-		{
-			for (kk = 0; kk < col_row; kk++)
-				out[ii*colb + jj] += aa[ii*col_row + kk] * bb[kk*colb + jj];
-		}
-	}
-
-	return;
-}
-void mat_mul(double *aa, double *bb, double *out, int rowa, int col_row, int colb)
-{
-	int ii, jj, kk;
-	for (ii = 0; ii < rowa*colb; ii++)
-		out[ii] = 0;
-
-	for (ii = 0; ii < rowa; ii++)
-	{
-		for (jj = 0; jj < colb; jj++)
-		{
-			for (kk = 0; kk < col_row; kk++)
-				out[ii*colb + jj] += aa[ii*col_row + kk] * bb[kk*colb + jj];
-		}
-	}
-
-	return;
-}
 void mat_transpose(double *in, double *out, int row_in, int col_in)
 {
 	int ii, jj;

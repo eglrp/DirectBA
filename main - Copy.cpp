@@ -869,7 +869,7 @@ void DirectAlignmentToFile(char *Path, DirectAlignPara &alignmentParas, vector<I
 				if (abs(d) < 1e-9)
 					depthMap[ii + jj * width] = 0;
 				else
-					depthMap[ii + jj* width] = cos * d;
+					depthMap[ii + jj* width] = cos / d;
 			}
 		}
 		sprintf(Fname, "%s/frontoD_%d_%d.dat", Path, cid, pyrID), WriteGridBinary(Fname, depthMap, width, height);
@@ -895,7 +895,7 @@ void DirectAlignmentToFile(char *Path, DirectAlignPara &alignmentParas, vector<I
 					fprintf(fp, "%.8e %.8e %.8e\n", XYZ[0], XYZ[1], XYZ[2]);
 				else
 					fprintf(fp, "%.8e %.8e %.8e %d %d %d\n", XYZ[0], XYZ[1], XYZ[2],
-					(int)allImgs[cid].imgPyr[pyrID].data[(ii + jj*width)*nchannels + 2], (int)allImgs[cid].imgPyr[pyrID].data[(ii + jj*width)*nchannels + 1], (int)allImgs[cid].imgPyr[pyrID].data[(ii + jj*width)*nchannels]);
+					(int)allImgs[cid].imgPyr[pyrID].data[(ii + jj*width)*nchannels], (int)allImgs[cid].imgPyr[pyrID].data[(ii + jj*width)*nchannels + 1], (int)allImgs[cid].imgPyr[pyrID].data[(ii + jj*width)*nchannels + 2]);
 			}
 		}
 		fclose(fp);
@@ -1155,7 +1155,6 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 					if (fixPose == 1)
 						problem.SetParameterBlockConstant(parameter_blocks[2]); //pose nonRef
 					problem.SetParameterBlockConstant(parameter_blocks[3]); //photometric
-
 				}
 				else
 				{
@@ -1183,7 +1182,6 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 						problem.SetParameterBlockConstant(parameter_blocks[2]); //pose nonRef
 					problem.SetParameterBlockConstant(parameter_blocks[3]); //photometric
 					problem.SetParameterLowerBound(parameter_blocks[0], 0, 1e-9); //positive depth
-
 				}
 			}
 		}
@@ -1207,7 +1205,11 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 					for (int kk = 0; kk < nchannels; kk++)
 						colorDif += (double)((int)allImgs[cid].imgPyr[pyrID].data[kk + (iref + jref* width)*nchannels] - (int)allImgs[cid].imgPyr[pyrID].data[kk + (i + j* width)*nchannels]);
 					colorDif /= nchannels;
-					double edgePreservingWeight = std::exp(-abs(colorDif) / alignmentParas.colorSigma);
+					double edgePreservingWeight;
+					// if (abs(colorDif) < alignmentParas.colorSigma)
+					//edgePreservingWeight = exp(-pow(colorDif / alignmentParas.colorSigma, 2));//let's
+					//else
+					edgePreservingWeight = exp(-abs(colorDif) / alignmentParas.colorSigma / 3);//let's
 
 					ceres::LossFunction *RegIntraLoss = new ceres::HuberLoss(3);
 					ceres::LossFunction *ScaleRegIntraLoss = new ceres::ScaledLoss(RegIntraLoss, regIntraWeight*edgePreservingWeight, ceres::TAKE_OWNERSHIP);
@@ -1421,11 +1423,12 @@ int DirectAlignment(char *Path, vector<ImgData> &allImgs, vector<CameraData> &al
 
 	int nscales = 5, //actually 6 scales = 5 down sampled images + org image
 		innerIter = 20;
-	double dataWeight = 0.0001, regIntraWeight = 0.1, regInterWeight = 1.0 - dataWeight - regIntraWeight;
-	double DepthLow = 0.8, DepthHigh = 1.7, physicalRange = 1500;
+	double DepthLow = 1.0, DepthHigh = 1.7, physicalRange = 1500;
+	double dataWeight = 1.0, regIntraWeight = 1.0, regInterWeight = 1.0 - dataWeight - regIntraWeight;
 	double reprojectionSigma = 0.3, colorSigma = 3.0,   //expected std of variables
-		depthSigma = 0.01;// (DepthHigh - DepthLow) / physicalRange;//try to convert 1mm std to system unit
+		depthSigma = (DepthHigh - DepthLow) / physicalRange;//try to convert 1mm std to system unit
 	double ImGradientThesh2 = 1;
+
 	DirectAlignPara alignmentParas(dataWeight, regIntraWeight, regInterWeight, colorSigma, depthSigma, ImGradientThesh2, DepthLow, DepthHigh, reprojectionSigma);
 
 	for (int cid = 0; cid < (int)allImgs.size(); cid++)
@@ -1439,13 +1442,13 @@ int DirectAlignment(char *Path, vector<ImgData> &allImgs, vector<CameraData> &al
 		BuildDepthPyramid(allImgs[cid].depth, allImgs[cid].depthPyr, allImgs[cid].width, allImgs[cid].height, nscales);
 	}
 
-	/*int pyrID = 1;
+	int pyrID = 5;
 	//for (int cid = 0; cid < (int)allImgs.size(); cid++)
 	{
-	int cid = 0;
-	char Fname[512];  sprintf(Fname, "%s/D_%d_%d.dat", Path, cid, pyrID);
-	ReadGridBinary(Fname, allImgs[cid].depthPyr[pyrID], allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows);
-	UpsamleDepth(allImgs[cid].depthPyr[pyrID], allImgs[cid].depthPyr[pyrID - 1], allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows, allImgs[cid].imgPyr[pyrID - 1].cols, allImgs[cid].imgPyr[pyrID - 1].rows);
+		int cid = 0;
+		char Fname[512];  sprintf(Fname, "%s/D_%d_%d.dat", Path, cid, pyrID);
+		ReadGridBinary(Fname, allImgs[cid].depthPyr[pyrID], allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows);
+		UpsamleDepth(allImgs[cid].depthPyr[pyrID], allImgs[cid].depthPyr[pyrID - 1], allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows, allImgs[cid].imgPyr[pyrID - 1].cols, allImgs[cid].imgPyr[pyrID - 1].rows);
 	}
 	/*FILE *fp = fopen("D:/Micro/p2.txt", "r");
 	for (int cid = 0; cid < (int)allImgs.size(); cid++)
