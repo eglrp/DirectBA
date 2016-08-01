@@ -51,7 +51,6 @@ double gaussian_noise(double mean, double std);
 void normalize(double *x, int dim);
 void mat_invert(double* mat, double* imat, int dims = 3);
 void mat_invert(float* mat, float* imat, int dims = 3);
-void mat_mul(float *aa, float *bb, float *out, int rowa, int col_row, int colb);
 template <class T>void mat_mul(T *aa, T *bb, T *out, int rowa, int col_row, int colb)
 {
 	int ii, jj, kk;

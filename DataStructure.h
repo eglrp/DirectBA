@@ -50,7 +50,7 @@ struct CameraData
 	int LensModel, ShutterModel;
 	double threshold, ninlierThresh;
 	std::string filename;
-	int nviews, width, height, hasIntrinsicExtrinisc;
+	int nviews, width, height, hasIntrinsicExtrinisc, frameID;
 	bool notCalibrated, valid;
 };
 struct DirectAlignPara
@@ -85,5 +85,12 @@ struct VideoData
 	}
 	int nVideos, startTime, stopTime, nframesI, maxFrameOffset;
 	CameraData *VideoInfo;
+};
+
+struct VisualizationManager
+{
+	vector<Point3d> CorpusPointPosition, PointPosition;
+	vector<Point3f> CorpusPointColor, PointColor;
+	vector<CameraData> glCorpusCameraInfo, glCameraPoseInfo;
 };
 #endif 
