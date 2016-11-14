@@ -56,8 +56,26 @@ int is_little_endian()
 	return *((float *)b) < 1.0;
 }
 
+int ReadCorpusInfo(char *Fname, Corpus &data, double scale)
+{
+	FILE *fp = fopen(Fname, "r");
+	if (fp == NULL)
+	{
+		printf("Cannot load %s\n", Fname);
+		return 1;
+	}
+	double x, y, z, r, g, b;
+	while (fscanf(fp, "%lf %lf %lf %d %d %d", &x, &y, &z, &r, &g, &b) != EOF)
+	{
+		data.xyz.push_back(Point3d(x, y, z)*scale);
+		data.rgb.push_back(Point3i(r, g, b));
+	}
+	fclose(fp);
 
-int readCalibInfo(char *BAfileName, Corpus &CorpusData)
+	data.n3dPoints = (int)data.xyz.size();
+	return 0;
+}
+int ReadCalibInfo(char *BAfileName, Corpus &CorpusData, double scale)
 {
 	FILE *fp = fopen(BAfileName, "r");
 	if (fp == NULL)
@@ -130,6 +148,8 @@ int readCalibInfo(char *BAfileName, Corpus &CorpusData)
 			for (int jj = 3; jj < 7; jj++)
 				CorpusData.camera[viewID].distortion[jj] = 0;
 		}
+
+
 		if (CorpusData.camera[viewID].ShutterModel == 1)
 			fscanf(fp, "%lf %lf %lf %lf %lf %lf ", &CorpusData.camera[viewID].wt[0], &CorpusData.camera[viewID].wt[1], &CorpusData.camera[viewID].wt[2], &CorpusData.camera[viewID].wt[3], &CorpusData.camera[viewID].wt[4], &CorpusData.camera[viewID].wt[5]);
 		else
@@ -143,6 +163,9 @@ int readCalibInfo(char *BAfileName, Corpus &CorpusData)
 		for (int jj = 0; jj < 6; jj++)
 			CorpusData.camera[viewID].rt[jj] = rt[jj];
 
+		for (int jj = 0; jj < 3; jj++)
+			CorpusData.camera[viewID].rt[jj + 3] *= scale, CorpusData.camera[viewID].wt[jj + 3] *= scale;
+
 		GetRTFromrt(CorpusData.camera[viewID].rt, CorpusData.camera[viewID].R, CorpusData.camera[viewID].T);
 		GetCfromT(CorpusData.camera[viewID].R, CorpusData.camera[viewID].rt + 3, CorpusData.camera[viewID].C);
 
@@ -153,7 +176,7 @@ int readCalibInfo(char *BAfileName, Corpus &CorpusData)
 
 	return 0;
 }
-int ReadVideoDataI(char *Path, VideoData &vInfo, int viewID, int startTime, int stopTime, double threshold, int ninliersThresh, int silent)
+int ReadVideoDataI(char *Path, VideoData &vInfo, int viewID, int startTime, int stopTime, double scale, double threshold, int ninliersThresh, int silent)
 {
 	char Fname[200];
 	int frameID, LensType, ShutterModel, width, height;
@@ -300,13 +323,20 @@ int ReadVideoDataI(char *Path, VideoData &vInfo, int viewID, int startTime, int 
 	double rt[6], wt[6];
 	while (fscanf(fp, "%d %lf %lf %lf %lf %lf %lf ", &frameID, &rt[0], &rt[1], &rt[2], &rt[3], &rt[4], &rt[5]) != EOF)
 	{
+		for (int jj = 0; jj < 3; jj++)
+			rt[jj + 3] *= scale;
+
 		if (vInfo.VideoInfo[validFrame].ShutterModel == 1)
+		{
 			for (int jj = 0; jj < 6; jj++)
 				fscanf(fp, "%lf ", &wt[jj]);
+			for (int jj = 0; jj < 3; jj++)
+				wt[jj + 3] *= scale;
+		}
 
 		if (frameID >= startTime - maxFrameOffset && frameID <= stopTime + maxFrameOffset)
 		{
-			if (vInfo.VideoInfo[frameID].hasIntrinsicExtrinisc < 1 || abs(rt[3]) + abs(rt[4]) + abs(rt[5]) < 0.001)
+			if (vInfo.VideoInfo[frameID].hasIntrinsicExtrinisc < 1)
 			{
 				vInfo.VideoInfo[frameID].valid = false;
 				continue;
@@ -354,8 +384,8 @@ void ReadSudiptaDepth(char *Path, ImgData &imdat, int i)
 		return;
 	}
 
-	imdat.depth = new float[W*H];
-	imdat.depthConf = new int[W*H];
+	imdat.InvDepth = new double[W*H];
+	imdat.DepthConf = new double[W*H];
 
 	for (int p = 0; p < numPoints; p++)
 	{
@@ -364,8 +394,8 @@ void ReadSudiptaDepth(char *Path, ImgData &imdat, int i)
 		float d = freadf(fd), c = freadf(fd);
 		int l = freadi(fd);
 
-		imdat.depth[xi + yi*W] = d;
-		imdat.depthConf[xi + yi*W] = (int)(c + 0.5);
+		imdat.InvDepth[xi + yi*W] = d;
+		imdat.DepthConf[xi + yi*W] = (double)c;
 	}
 	printf("done.\n");
 
@@ -378,7 +408,7 @@ bool WriteInvDepthToImage(char *Fname, ImgData &imdat)
 	Mat M = Mat::zeros(height, width, CV_8UC1);
 	for (jj = 0; jj < height; jj++)
 		for (ii = 0; ii < width; ii++)
-			M.data[ii + jj*width] = (unsigned char)(int)(imdat.depth[ii + jj*width] * 255.0 + 0.5);
+			M.data[ii + jj*width] = (unsigned char)(int)(imdat.InvDepth[ii + jj*width] * 255.0 + 0.5);
 
 	return imwrite(Fname, M);
 }
@@ -389,7 +419,7 @@ bool WriteInvDepthToImage(char *Fname, float *depth, int width, int height, doub
 	Mat M = Mat::zeros(height, width, CV_8UC1);
 	for (jj = 0; jj < height; jj++)
 		for (ii = 0; ii < width; ii++)
-			M.data[ii + jj*width] = (unsigned char)(int)(255.0 / (abs(depth[ii + jj*width]) -minDepth)/(maxDepth-minDepth)+ 0.5);
+			M.data[ii + jj*width] = (unsigned char)(int)(255.0 / (abs(depth[ii + jj*width]) - minDepth) / (maxDepth - minDepth) + 0.5);
 
 	return imwrite(Fname, M);
 
@@ -561,6 +591,30 @@ int WriteSynthFile(char *Path, Corpus &CorpusData, int SynthID)
 
 	return 0;
 }
+bool WriteGridToImage(char *fname, bool *Img, int width, int height, int nchannels)
+{
+	int ii, jj, kk, length = width*height;
+
+	Mat M = Mat::zeros(height, width, nchannels == 1 ? CV_8UC1 : CV_8UC3);
+	for (jj = 0; jj < height; jj++)
+		for (ii = 0; ii < width; ii++)
+			for (kk = 0; kk < nchannels; kk++)
+				M.data[nchannels*ii + kk + nchannels*jj*width] = Img[ii + jj*width + kk*length] ? 255 : 0;
+
+	return imwrite(fname, M);
+}
+bool WriteGridToImage(char *fname, int *Img, int width, int height, int nchannels)
+{
+	int ii, jj, kk, length = width*height;
+
+	Mat M = Mat::zeros(height, width, nchannels == 1 ? CV_8UC1 : CV_8UC3);
+	for (jj = 0; jj < height; jj++)
+		for (ii = 0; ii < width; ii++)
+			for (kk = 0; kk < nchannels; kk++)
+				M.data[nchannels*ii + kk + nchannels*jj*width] = Img[ii + jj*width + kk*length]>0 ? 255 : 0;
+
+	return imwrite(fname, M);
+}
 bool WriteGridToImage(char *fname, unsigned char *Img, int width, int height, int nchannels)
 {
 	int ii, jj, kk, length = width*height;
@@ -660,7 +714,7 @@ int  read_pfm_file(const std::string& filename, ImgData &depthmap)
 	std::vector<uchar> data(datasize * sizeof(float));
 
 	depthmap.width = w, depthmap.height = h;
-	depthmap.depth = new float[w*h*channel];
+	depthmap.InvDepth = new double[w*h*channel];
 	size_t count = fread((void *)&data[0], sizeof(float), datasize, f);
 	if (count != datasize)
 	{
@@ -681,7 +735,7 @@ int  read_pfm_file(const std::string& filename, ImgData &depthmap)
 		int jj = (i / channel) % w;
 		int ii = (i / channel) / w;
 		int ch = i % channel;
-		depthmap.depth[jj + (h - 1 - ii)*w + l*ch] = *((float *)p);
+		depthmap.InvDepth[jj + (h - 1 - ii)*w + l*ch] = *((float *)p);
 	}
 	fclose(f);
 	return 0;
@@ -800,6 +854,69 @@ void save_pfm_file(const std::string& filename, const cv::Mat& image)
 
 	fclose(stream);
 	return;
+}
+
+int ExtractVideoFrames(char *Path, char *inName, int startF, int stopF, int increF, int rotateImage, int nchannels, int Usejpg)
+{
+	char Fname[200];
+
+	sprintf(Fname, "%s/%s", Path, inName);
+	cv::VideoCapture cap = VideoCapture(Fname);
+	if (!cap.isOpened())
+	{
+		printf("Cannot load %s\n", Fname);
+		return 1;
+	}
+
+
+	Mat img;
+	int fid = 0;
+	while (true)
+	{
+		cap >> img;
+		if (img.empty())
+			break;
+
+		if (rotateImage == 1)  //flip updown
+		{
+			int width = img.cols, height = img.rows;
+			for (int kk = 0; kk < nchannels; kk++)
+			{
+				for (int jj = 0; jj < height / 2; jj++)
+					for (int ii = 0; ii < width; ii++)
+					{
+						char buf = img.data[nchannels*ii + jj*nchannels*width + kk];
+						img.data[nchannels*ii + jj*nchannels*width + kk] = img.data[nchannels*(width - 1 - ii) + (height - 1 - jj)*nchannels*width + kk];
+						img.data[nchannels*(width - 1 - ii) + (height - 1 - jj)*nchannels*width + kk] = buf;
+					}
+			}
+		}
+		else if (rotateImage == 2) //rotate right
+		{
+			;
+		}
+		else if (rotateImage == 3)//roate left
+		{
+			;
+		}
+		if (fid >= startF && fid <= stopF && (fid - startF) % increF == 0)
+		{
+			if (Usejpg == 1)
+				sprintf(Fname, "%s/%d.jpg", Path, fid);
+			else
+				sprintf(Fname, "%s/%d.png", Path, fid);
+
+			//if (IsFileExist(Fname) == 1)
+			//	continue;
+			imwrite(Fname, img);
+		}
+		if (fid >= stopF)
+			break;
+		fid++;
+	}
+	cap.release();
+
+	return 0;
 }
 
 

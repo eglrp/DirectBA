@@ -31,8 +31,9 @@ using namespace std;
 void makeDir(char *Fname);
 int IsFileExist(char *Fname, bool silient = true);
 
-int readCalibInfo(char *BAfileName, Corpus &CorpusData);
-int ReadVideoDataI(char *Path, VideoData &vInfo, int viewID, int startTime, int stopTime, double threshold = 3, int ninliersThresh = 40, int silent = 1);
+int ReadCorpusInfo(char *Fname, Corpus &data, double scale = 1.0);
+int ReadCalibInfo(char *BAfileName, Corpus &CorpusData, double scale = 1.0);
+int ReadVideoDataI(char *Path, VideoData &vInfo, int viewID, int startTime, int stopTime, double scale = 1.0, double threshold = 3, int ninliersThresh = 40, int silent = 1);
 
 void ReadSudiptaDepth(char *Path, ImgData &imdat, int i);
 bool WriteInvDepthToImage(char *Fname, ImgData &imdat);
@@ -79,6 +80,8 @@ template <class myType> bool ReadGridBinary(char *fn, myType *data, int width, i
 	return true;
 }
 
+bool WriteGridToImage(char *fname, bool *Img, int width, int height, int nchannels);
+bool WriteGridToImage(char *fname, int *Img, int width, int height, int nchannels);
 bool WriteGridToImage(char *fname, unsigned char *Img, int width, int height, int nchannels);
 bool WriteGridToImage(char *fname, double *Img, int width, int height, int nchannels);
 
@@ -87,5 +90,7 @@ bool ReadFlowDataBinary(char *fnX, char *fnY, Point2f *fxy, int width, int heigh
 int  read_pfm_file(const std::string& filename, ImgData &depthmap);
 cv::Mat read_pfm_file(const std::string& filename);
 void save_pfm_file(const std::string& filename, const cv::Mat& image);
+
+int ExtractVideoFrames(char *Path, char *inName, int startF, int stopF, int increF, int rotateImage, int nchannels, int Usejpg, double scale = 1.0);
 
 #endif

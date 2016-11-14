@@ -89,13 +89,14 @@ template <class T>  double VarianceArray(vector<T>&data, T mean)
 	return var / (data.size() - 1);
 }
 
-void Quick_Sort_Double(double * A, int *B, int low, int high);
-void Quick_Sort_Float(float * A, int *B, int low, int high);
-void Quick_Sort_Int(int * A, int *B, int low, int high);
+void LS_Solution_Double(double *lpA, double *lpB, int m, int n);
+void QR_Solution_Double(double *lpA, double *lpB, int m, int n);
 template <class m_Type> class m_TemplateClass_1
 {
 public:
 	void Quick_Sort(m_Type* A, int *B, int low, int high);
+	void QR_Solution(m_Type *lpA, m_Type *lpB, int m, int n);
+	void QR_Solution_2(m_Type *lpA, m_Type *lpB, int m, int n, int k);
 };
 template <class m_Type> void m_TemplateClass_1<m_Type>::Quick_Sort(m_Type* A, int *B, int low, int high)
 //A: array to be sorted (from min to max); B: index of the original array; low and high: array range
@@ -167,6 +168,198 @@ template <class m_Type> void m_TemplateClass_1<m_Type>::Quick_Sort(m_Type* A, in
 	if (scanDown + 1 < high)
 		Quick_Sort(A, B, scanDown + 1, high);
 }
+template <class m_Type> void m_TemplateClass_1<m_Type>::QR_Solution(m_Type *lpA, m_Type *lpB, int m, int n)
+{
+	int ii, jj, mm, kk;
+	m_Type t, d, alpha, u;
+	m_Type *lpC = new m_Type[n];
+	m_Type *lpQ = new m_Type[m*m];
+
+	for (ii = 0; ii < m; ii++)
+	{
+		for (jj = 0; jj < m; jj++)
+		{
+			*(lpQ + ii*m + jj) = (m_Type)0;
+			if (ii == jj)
+				*(lpQ + ii*m + jj) = (m_Type)1;
+		}
+	}
+
+	for (kk = 0; kk<n; kk++)
+	{
+		u = (m_Type)0;
+		for (ii = kk; ii<m; ii++)
+		{
+			if (fabs(*(lpA + ii*n + kk))>u)
+				u = (m_Type)(fabs(*(lpA + ii*n + kk)));
+		}
+
+		alpha = (m_Type)0;
+		for (ii = kk; ii < m; ii++)
+		{
+			t = *(lpA + ii*n + kk) / u;
+			alpha = alpha + t*t;
+		}
+		if (*(lpA + kk*n + kk) >(m_Type)0)
+			u = -u;
+		alpha = (m_Type)(u*sqrt(alpha));
+		u = (m_Type)(sqrt(2.0*alpha*(alpha - *(lpA + kk*n + kk))));
+		if (fabs(u)>1e-8)
+		{
+			*(lpA + kk*n + kk) = (*(lpA + kk*n + kk) - alpha) / u;
+			for (ii = kk + 1; ii < m; ii++)
+				*(lpA + ii*n + kk) = *(lpA + ii*n + kk) / u;
+			for (jj = 0; jj < m; jj++)
+			{
+				t = (m_Type)0;
+				for (mm = kk; mm < m; mm++)
+					t = t + *(lpA + mm*n + kk)*(*(lpQ + mm*m + jj));
+				for (ii = kk; ii < m; ii++)
+					*(lpQ + ii*m + jj) = *(lpQ + ii*m + jj) - (m_Type)(2.0*t*(*(lpA + ii*n + kk)));
+			}
+			for (jj = kk + 1; jj < n; jj++)
+			{
+				t = (m_Type)0;
+				for (mm = kk; mm < m; mm++)
+					t = t + *(lpA + mm*n + kk)*(*(lpA + mm*n + jj));
+				for (ii = kk; ii < m; ii++)
+					*(lpA + ii*n + jj) = *(lpA + ii*n + jj) - (m_Type)(2.0*t*(*(lpA + ii*n + kk)));
+			}
+			*(lpA + kk*n + kk) = alpha;
+			for (ii = kk + 1; ii < m; ii++)
+				*(lpA + ii*n + kk) = (m_Type)0;
+		}
+	}
+	for (ii = 0; ii < m - 1; ii++)
+	{
+		for (jj = ii + 1; jj < m; jj++)
+		{
+			t = *(lpQ + ii*m + jj);
+			*(lpQ + ii*m + jj) = *(lpQ + jj*m + ii);
+			*(lpQ + jj*m + ii) = t;
+		}
+	}
+	//Solve the equation
+	for (ii = 0; ii < n; ii++)
+	{
+		d = (m_Type)0;
+		for (jj = 0; jj < m; jj++)
+			d = d + *(lpQ + jj*m + ii)*(*(lpB + jj));
+		*(lpC + ii) = d;
+	}
+	*(lpB + n - 1) = *(lpC + n - 1) / (*(lpA + (n - 1)*n + n - 1));
+	for (ii = n - 2; ii >= 0; ii--)
+	{
+		d = (m_Type)0;
+		for (jj = ii + 1; jj < n; jj++)
+			d = d + *(lpA + ii*n + jj)*(*(lpB + jj));
+		*(lpB + ii) = (*(lpC + ii) - d) / (*(lpA + ii*n + ii));
+	}
+
+	delete[]lpQ;
+	delete[]lpC;
+	return;
+}
+template <class m_Type> void m_TemplateClass_1<m_Type>::QR_Solution_2(m_Type *lpA, m_Type *lpB, int m, int n, int k)
+{
+	int ii, jj, mm, kk;
+	m_Type t, d, alpha, u;
+	m_Type *lpC = new m_Type[n];
+	m_Type *lpQ = new m_Type[m*m];
+
+	for (ii = 0; ii < m; ii++)
+	{
+		for (jj = 0; jj < m; jj++)
+		{
+			*(lpQ + ii*m + jj) = (m_Type)0;
+			if (ii == jj)
+				*(lpQ + ii*m + jj) = (m_Type)1;
+		}
+	}
+
+	for (kk = 0; kk<n; kk++)
+	{
+		u = (m_Type)0;
+		for (ii = kk; ii<m; ii++)
+		{
+			if (fabs(*(lpA + ii*n + kk))>u)
+				u = (m_Type)(fabs(*(lpA + ii*n + kk)));
+		}
+
+		alpha = (m_Type)0;
+		for (ii = kk; ii < m; ii++)
+		{
+			t = *(lpA + ii*n + kk) / u;
+			alpha = alpha + t*t;
+		}
+		if (*(lpA + kk*n + kk) >(m_Type)0)
+			u = -u;
+		alpha = (m_Type)(u*sqrt(alpha));
+		u = (m_Type)(sqrt(2.0*alpha*(alpha - *(lpA + kk*n + kk))));
+		if (fabs(u)>1e-8)
+		{
+			*(lpA + kk*n + kk) = (*(lpA + kk*n + kk) - alpha) / u;
+			for (ii = kk + 1; ii < m; ii++)
+				*(lpA + ii*n + kk) = *(lpA + ii*n + kk) / u;
+			for (jj = 0; jj < m; jj++)
+			{
+				t = (m_Type)0;
+				for (mm = kk; mm < m; mm++)
+					t = t + *(lpA + mm*n + kk)*(*(lpQ + mm*m + jj));
+				for (ii = kk; ii < m; ii++)
+					*(lpQ + ii*m + jj) = *(lpQ + ii*m + jj) - (m_Type)(2.0*t*(*(lpA + ii*n + kk)));
+			}
+			for (jj = kk + 1; jj < n; jj++)
+			{
+				t = (m_Type)0;
+				for (mm = kk; mm < m; mm++)
+					t = t + *(lpA + mm*n + kk)*(*(lpA + mm*n + jj));
+				for (ii = kk; ii < m; ii++)
+					*(lpA + ii*n + jj) = *(lpA + ii*n + jj) - (m_Type)(2.0*t*(*(lpA + ii*n + kk)));
+			}
+			*(lpA + kk*n + kk) = alpha;
+			for (ii = kk + 1; ii < m; ii++)
+				*(lpA + ii*n + kk) = (m_Type)0;
+		}
+	}
+	for (ii = 0; ii < m - 1; ii++)
+	{
+		for (jj = ii + 1; jj < m; jj++)
+		{
+			t = *(lpQ + ii*m + jj);
+			*(lpQ + ii*m + jj) = *(lpQ + jj*m + ii);
+			*(lpQ + jj*m + ii) = t;
+		}
+	}
+	//Solve the equation
+
+	m_Type *lpBB;
+	for (mm = 0; mm < k; mm++)
+	{
+		lpBB = lpB + mm*m;
+
+		for (ii = 0; ii < n; ii++)
+		{
+			d = (m_Type)0;
+			for (jj = 0; jj < m; jj++)
+				d = d + *(lpQ + jj*m + ii)*(*(lpBB + jj));
+			*(lpC + ii) = d;
+		}
+		*(lpBB + n - 1) = *(lpC + n - 1) / (*(lpA + (n - 1)*n + n - 1));
+		for (ii = n - 2; ii >= 0; ii--)
+		{
+			d = (m_Type)0;
+			for (jj = ii + 1; jj < n; jj++)
+				d = d + *(lpA + ii*n + jj)*(*(lpBB + jj));
+			*(lpBB + ii) = (*(lpC + ii) - d) / (*(lpA + ii*n + ii));
+		}
+	}
+
+	delete[]lpQ;
+	delete[]lpC;
+	return;
+}
+
 template <class myType>void Get_Sub_Mat(myType *srcMat, myType *dstMat, int srcWidth, int srcHeight, int dstWidth, int startCol, int startRow)
 {
 	int ii, jj;
@@ -210,6 +403,7 @@ void GetCfromT(double *R, double *T, double *C);
 void getRayDir(double *rayDir, double *iK, double *R, double *uv1);
 
 void AssembleRT(double *R, double *T, double *RT, bool GivenCenter = false);
+void AssembleRT_RS(Point2d uv, double *K, double *R_global, double *T_global, double *wt, double *R, double *T);
 void DesembleRT(double *R, double *T, double *RT);
 void AssembleP(double *K, double *R, double *T, double *P);
 void AssembleP(double *K, double *RT, double *P);

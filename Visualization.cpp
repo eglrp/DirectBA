@@ -705,7 +705,7 @@ void ReadCurrentSfmGL(char *path, bool drawPointColor)
 	CameraData camI;
 	Corpus CorpusData;
 	sprintf(Fname, "%s/BA_Camera_AllParams_after.txt", path);
-	if (readCalibInfo(Fname, CorpusData))
+	if (ReadCalibInfo(Fname, CorpusData))
 		for (int ii = 0; ii < CorpusData.nCameras; ii++)
 			g_vis.glCorpusCameraInfo.push_back(CorpusData.camera[ii]);
 

@@ -131,24 +131,55 @@ void mat_completeSym(double *mat, int size, bool upper)
 	return;
 }
 
-void Quick_Sort_Int(int * A, int *B, int low, int high)
+void LS_Solution_Double(double *lpA, double *lpB, int m, int n)
 {
-	m_TemplateClass_1<int> m_TempClass;
-	m_TempClass.Quick_Sort(A, B, low, high);
+	if (m == n)
+	{
+		QR_Solution_Double(lpA, lpB, n, n);
+		return;
+	}
+
+	int i, j, k, n2 = n*n;
+	double *A = new double[n2];
+	double *B = new double[n];
+
+	for (i = 0; i < n2; i++)
+		*(A + i) = 0.0;
+	for (i = 0; i < n; i++)
+		*(B + i) = 0.0;
+
+	for (k = 0; k < m; k++)
+	{
+		for (j = 0; j < n; j++)
+		{
+			for (i = 0; i < n; i++)
+				*(A + j*n + i) += (*(lpA + k*n + i))*(*(lpA + k*n + j));
+			*(B + j) += (*(lpB + k))*(*(lpA + k*n + j));
+		}
+	}
+
+	QR_Solution_Double(A, B, n, n);
+
+	for (i = 0; i < n; i++)
+		*(lpB + i) = *(B + i);
+
+	delete[]B;
+	delete[]A;
 	return;
 }
-void Quick_Sort_Float(float * A, int *B, int low, int high)
+void QR_Solution_Double(double *lpA, double *lpB, int m, int n)
 {
-	m_TemplateClass_1<float> m_TempClass;
-	m_TempClass.Quick_Sort(A, B, low, high);
-	return;
-}
-void Quick_Sort_Double(double * A, int *B, int low, int high)
-{
+	if (m > 3000)
+	{
+		LS_Solution_Double(lpA, lpB, m, n);
+		return;
+	}
+
 	m_TemplateClass_1<double> m_TempClass;
-	m_TempClass.Quick_Sort(A, B, low, high);
+	m_TempClass.QR_Solution(lpA, lpB, m, n);
 	return;
 }
+
 
 void GetIntrinsicScaled(double *Intrinsic, double *IntrinsicScaled, double s)
 {
@@ -411,6 +442,29 @@ void AssembleRT(double *R, double *T, double *RT, bool GivenCenter)
 		RT[8] = R[6], RT[9] = R[7], RT[10] = R[8], RT[11] = -mT[2];
 	}
 }
+void AssembleRT_RS(Point2d uv, double *K, double *R_global, double *T_global, double *wt, double *R, double *T)
+{
+	double ycn = (uv.y - K[5]) / K[4];
+	double xcn = (uv.x - K[2] - K[1] * ycn) / K[0];
+
+	double wx = ycn*wt[0], wy = ycn*wt[1], wz = ycn*wt[2];
+	double wx2 = wx*wx, wy2 = wy*wy, wz2 = wz*wz, wxz = wx*wz, wxy = wx*wy, wyz = wy*wz;
+	double denum = 1.0 + wx2 + wy2 + wz2;
+
+	double Rw[9] = { 1.0 + wx2 - wy2 - wz2, 2.0 * wxy - 2.0 * wz, 2.0 * wy + 2.0 * wxz,
+		2.0 * wz + 2.0 * wxy, 1.0 - wx2 + wy2 - wz2, 2.0 * wyz - 2.0 * wx,
+		2.0 * wxz - 2.0 * wy, 2.0 * wx + 2.0 * wyz, 1.0 - wx2 - wy2 + wz2 };
+
+	for (int jj = 0; jj < 9; jj++)
+		Rw[jj] = Rw[jj] / denum;
+
+	 mat_mul(Rw, R_global, R, 3, 3, 3);
+	 for (int kk = 0; kk < 3; kk++)
+		 T[kk] = T_global[kk] + ycn*wt[3 + kk];
+
+	return;
+}
+
 void DesembleRT(double *R, double *T, double *RT)
 {
 	R[0] = RT[0], R[1] = RT[1], R[2] = RT[2], T[0] = RT[3];
@@ -448,11 +502,11 @@ void ConvertFrontoDepth2LineOfSightDepth(ImgData &Img, CameraData &Cam)
 			getRayDir(rayDir, Cam.invK, Cam.R, ij);
 			double cos = (rayDir[0] * opticalAxis[0] + rayDir[1] * opticalAxis[1] + rayDir[2] * opticalAxis[2]) /
 				sqrt(pow(rayDir[0], 2) + pow(rayDir[1], 2) + pow(rayDir[2], 2)) / normOptical;
-			double fronto_d = Img.depth[ii + jj*width];
+			double fronto_d = Img.InvDepth[ii + jj*width];
 			if (fronto_d < 0)
-				Img.depth[ii + jj*width] = 0;
+				Img.InvDepth[ii + jj*width] = 0;
 			else
-				Img.depth[ii + jj*width] = fronto_d / cos;
+				Img.InvDepth[ii + jj*width] = fronto_d / cos;
 		}
 	}
 }
@@ -473,11 +527,11 @@ void ConvertLineOfSightDepth2FrontoDepth(ImgData &Img, CameraData &Cam)
 			getRayDir(rayDir, Cam.invK, Cam.R, ij);
 			double cos = (rayDir[0] * opticalAxis[0] + rayDir[1] * opticalAxis[1] + rayDir[2] * opticalAxis[2]) /
 				sqrt(pow(rayDir[0], 2) + pow(rayDir[1], 2) + pow(rayDir[2], 2)) / normOptical;
-			double los_d = Img.depth[ii + jj*width];
+			double los_d = Img.InvDepth[ii + jj*width];
 			if (los_d < 0)
-				Img.depth[ii + jj*width] = 0;
+				Img.InvDepth[ii + jj*width] = 0;
 			else
-				Img.depth[ii + jj*width] = los_d * cos;
+				Img.InvDepth[ii + jj*width] = los_d * cos;
 		}
 	}
 }
@@ -485,7 +539,7 @@ void ConvertDisparirty2DepthMap(ImgData &Img, double f, double b, double doffs)
 {
 	for (int jj = 0; jj < Img.height; jj++)
 		for (int ii = 0; ii < Img.width; ii++)
-			Img.depth[ii + jj*Img.width] = (float)(b*f / (Img.depth[ii + jj*Img.width] + doffs));
+			Img.InvDepth[ii + jj*Img.width] = (float)(b*f / (Img.InvDepth[ii + jj*Img.width] + doffs));
 	return;
 }
 void ConvertDepthMap2PointCloud(ImgData &Img, CameraData &Cam, vector<Point3f> &PCloud)
@@ -502,7 +556,7 @@ void ConvertDepthMap2PointCloud(ImgData &Img, CameraData &Cam, vector<Point3f> &
 			getRayDir(rayDir, Cam.invK, Cam.R, uv1);
 
 			for (int kk = 0; kk < 3; kk++)
-				xyz[kk] = Img.depth[ii + jj*Img.width] * rayDir[kk];
+				xyz[kk] = Img.InvDepth[ii + jj*Img.width] * rayDir[kk];
 
 			PCloud.push_back(Point3f(xyz[0], xyz[1], xyz[2]));
 		}
