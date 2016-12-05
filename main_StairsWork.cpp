@@ -946,7 +946,8 @@ struct DepthImgWarping_SSD {
 					{
 						Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color);//ceres takes row, column
 						uchar refColor = refImg[uv.x + ii + (uv.y + jj)*imgSize.x];
-						residuals[0] += Parameters[3][0] * color[0] + Parameters[3][1] - (T)(double)(int)refColor;
+						//residuals[0] += Parameters[3][0] * color[0] + Parameters[3][1] - (T)(double)(int)refColor;
+						residuals[0] += color[0] - (T)(double)(int)refColor;
 					}
 				}
 
@@ -975,7 +976,8 @@ struct DepthImgWarping_SSD {
 						for (int kk = 0; kk < nchannels; kk++)
 						{
 							uchar refColor = refImg[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk];
-							residuals[kk] += Parameters[3][0] * color[kk] + Parameters[3][1] - (T)(double)(int)refColor;
+							//residuals[kk] += Parameters[3][0] * color[kk] + Parameters[3][1] - (T)(double)(int)refColor;
+							residuals[kk] += color[kk] - (T)(double)(int)refColor;
 							//fprintf(fp2, "%.2f ", color[kk]);
 						}
 					}
@@ -1032,452 +1034,452 @@ private:
 	int  nchannels, hb, imgID, boundary;
 };
 /*struct DepthImgWarping_VAR{
-	DepthImgWarping_VAR(Point2i uv, double *xycnRef_, uchar *refImg, vector<uchar *> &nonRefImgs, vector<double *> &NonRefIntrinisc, Point2i &imgSize, int nchannels, double isigma, int hb) :
-	uv(uv), refImg(refImg), nonRefImgs(nonRefImgs), NonRefIntrinisc(NonRefIntrinisc), imgSize(imgSize), nchannels(nchannels), isigma(isigma), hb(hb)
-	{
-	nNonRef = (int)nonRefImgs.size();
-	boundary = max(imgSize.x, imgSize.y) / 50;
-	for (int ii = 0; ii < 3; ii++)
-	xycnRef[ii] = xycnRef_[ii];//xycn changes for every pixel. Pass by ref does not work
-	}
-	template <typename T>  bool operator()(T const* const* Parameters, T* residuals) const
-	{
-	//Parametes[0][0]: inverse depth for ref, Parameters[1][0..5]: poses for ref, Parameters[2..N+2][0..5]: poses for non-ref, Parameters[3+N][0..1]: photometric compenstation
-	T Rt[9];
-	ceres::AngleAxisToRotationMatrix(Parameters[1], Rt);//this gives R' due to its column major format
+DepthImgWarping_VAR(Point2i uv, double *xycnRef_, uchar *refImg, vector<uchar *> &nonRefImgs, vector<double *> &NonRefIntrinisc, Point2i &imgSize, int nchannels, double isigma, int hb) :
+uv(uv), refImg(refImg), nonRefImgs(nonRefImgs), NonRefIntrinisc(NonRefIntrinisc), imgSize(imgSize), nchannels(nchannels), isigma(isigma), hb(hb)
+{
+nNonRef = (int)nonRefImgs.size();
+boundary = max(imgSize.x, imgSize.y) / 50;
+for (int ii = 0; ii < 3; ii++)
+xycnRef[ii] = xycnRef_[ii];//xycn changes for every pixel. Pass by ref does not work
+}
+template <typename T>  bool operator()(T const* const* Parameters, T* residuals) const
+{
+//Parametes[0][0]: inverse depth for ref, Parameters[1][0..5]: poses for ref, Parameters[2..N+2][0..5]: poses for non-ref, Parameters[3+N][0..1]: photometric compenstation
+T Rt[9];
+ceres::AngleAxisToRotationMatrix(Parameters[1], Rt);//this gives R' due to its column major format
 
-	T RefRayDir[3] = { (T)0.0, (T) 0.0, (T) 0.0 };
-	for (int ii = 0; ii < 3; ii++)
-	for (int jj = 0; jj < 3; jj++)
-	RefRayDir[ii] += Rt[ii * 3 + jj] * (T)xycnRef[jj]; //ray direction: r = R'*iK*i;
+T RefRayDir[3] = { (T)0.0, (T) 0.0, (T) 0.0 };
+for (int ii = 0; ii < 3; ii++)
+for (int jj = 0; jj < 3; jj++)
+RefRayDir[ii] += Rt[ii * 3 + jj] * (T)xycnRef[jj]; //ray direction: r = R'*iK*i;
 
-	T C[3] = { (T)0.0, (T) 0.0, (T) 0.0 };
-	for (int ii = 0; ii < 3; ii++)
-	for (int jj = 0; jj < 3; jj++)
-	C[ii] += Rt[ii * 3 + jj] * Parameters[1][jj + 3]; ////-C = R't;
+T C[3] = { (T)0.0, (T) 0.0, (T) 0.0 };
+for (int ii = 0; ii < 3; ii++)
+for (int jj = 0; jj < 3; jj++)
+C[ii] += Rt[ii * 3 + jj] * Parameters[1][jj + 3]; ////-C = R't;
 
-	T XYZ[3], d = Parameters[0][0];
-	for (int ii = 0; ii < 3; ii++)
-	XYZ[ii] = RefRayDir[ii] / d - C[ii]; //X = r*d+c
+T XYZ[3], d = Parameters[0][0];
+for (int ii = 0; ii < 3; ii++)
+XYZ[ii] = RefRayDir[ii] / d - C[ii]; //X = r*d+c
 
-	//project to other views
-	int patchWidth = 2 * hb + 1, patchSize = patchWidth*patchWidth, patchSizeChannels = patchSize*nchannels;
-	T *Patches = new T[nchannels * patchSize * (nNonRef + 1)];//max dim
-	for (int jj = -hb; jj <= hb; jj++)
-	{
-	for (int ii = -hb; ii <= hb; ii++)
-	for (int kk = 0; kk < nchannels; kk++)
-	Patches[ii + hb + (jj + hb)*patchWidth + kk*patchSize] = (T)(int)refImg[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk];
-	}
+//project to other views
+int patchWidth = 2 * hb + 1, patchSize = patchWidth*patchWidth, patchSizeChannels = patchSize*nchannels;
+T *Patches = new T[nchannels * patchSize * (nNonRef + 1)];//max dim
+for (int jj = -hb; jj <= hb; jj++)
+{
+for (int ii = -hb; ii <= hb; ii++)
+for (int kk = 0; kk < nchannels; kk++)
+Patches[ii + hb + (jj + hb)*patchWidth + kk*patchSize] = (T)(int)refImg[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk];
+}
 
-	for (int ll = 1; ll < nNonRef + 1; ll++)
-	{
-	T tp[3], xcn, ycn, tu, tv, color[3];
-	ceres::AngleAxisRotatePoint(Parameters[1 + ll], XYZ, tp);
-	tp[0] += Parameters[1 + ll][3], tp[1] += Parameters[1 + ll][4], tp[2] += Parameters[1 + ll][5];
-	xcn = tp[0] / tp[2], ycn = tp[1] / tp[2];
+for (int ll = 1; ll < nNonRef + 1; ll++)
+{
+T tp[3], xcn, ycn, tu, tv, color[3];
+ceres::AngleAxisRotatePoint(Parameters[1 + ll], XYZ, tp);
+tp[0] += Parameters[1 + ll][3], tp[1] += Parameters[1 + ll][4], tp[2] += Parameters[1 + ll][5];
+xcn = tp[0] / tp[2], ycn = tp[1] / tp[2];
 
-	double *intrinsic = NonRefIntrinisc[ll - 1];
-	tu = (T)intrinsic[0] * xcn + (T)intrinsic[2] * ycn + (T)intrinsic[3];
-	tv = (T)intrinsic[1] * ycn + (T)intrinsic[4];
+double *intrinsic = NonRefIntrinisc[ll - 1];
+tu = (T)intrinsic[0] * xcn + (T)intrinsic[2] * ycn + (T)intrinsic[3];
+tv = (T)intrinsic[1] * ycn + (T)intrinsic[4];
 
-	if (nchannels == 1)
-	{
-	Grid2D<uchar, 1>  img(nonRefImgs[ll - 1], 0, imgSize.y, 0, imgSize.x);
-	BiCubicInterpolator<Grid2D < uchar, 1 > > Imgs(img);
+if (nchannels == 1)
+{
+Grid2D<uchar, 1>  img(nonRefImgs[ll - 1], 0, imgSize.y, 0, imgSize.x);
+BiCubicInterpolator<Grid2D < uchar, 1 > > Imgs(img);
 
-	if (tu<(T)boundary || tu>(T)(imgSize.x - boundary) || tv<(T)boundary || tv>(T)(imgSize.y - boundary))
-	{
-	for (int jj = -hb; jj <= hb; jj++)
-	for (int ii = -hb; ii <= hb; ii++)
-	Patches[ii + hb + (jj + hb)*patchWidth + ll*patchSizeChannels] = (T)(255.0*rand() / RAND_MAX);
-	}
-	else
-	{
-	for (int jj = -hb; jj <= hb; jj++)
-	{
-	for (int ii = -hb; ii <= hb; ii++)
-	{
-	Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color);//ceres takes row, column
-	Patches[ii + hb + (jj + hb)*patchWidth + ll*patchSizeChannels] = color[0];
-	}
-	}
-	}
-	}
-	else
-	{
-	Grid2D<uchar, 3>  img(nonRefImgs[ll - 1], 0, imgSize.y, 0, imgSize.x);
-	BiCubicInterpolator<Grid2D < uchar, 3 > > Imgs(img);
+if (tu<(T)boundary || tu>(T)(imgSize.x - boundary) || tv<(T)boundary || tv>(T)(imgSize.y - boundary))
+{
+for (int jj = -hb; jj <= hb; jj++)
+for (int ii = -hb; ii <= hb; ii++)
+Patches[ii + hb + (jj + hb)*patchWidth + ll*patchSizeChannels] = (T)(255.0*rand() / RAND_MAX);
+}
+else
+{
+for (int jj = -hb; jj <= hb; jj++)
+{
+for (int ii = -hb; ii <= hb; ii++)
+{
+Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color);//ceres takes row, column
+Patches[ii + hb + (jj + hb)*patchWidth + ll*patchSizeChannels] = color[0];
+}
+}
+}
+}
+else
+{
+Grid2D<uchar, 3>  img(nonRefImgs[ll - 1], 0, imgSize.y, 0, imgSize.x);
+BiCubicInterpolator<Grid2D < uchar, 3 > > Imgs(img);
 
-	if (tu<(T)boundary || tu>(T)(imgSize.x - boundary) || tv<(T)boundary || tv>(T)(imgSize.y - boundary))
-	for (int jj = -hb; jj <= hb; jj++)
-	for (int ii = -hb; ii <= hb; ii++)
-	for (int kk = 0; kk < nchannels; kk++)
-	Patches[ii + hb + (jj + hb)*patchWidth + kk*patchSize + ll*patchSizeChannels] = (T)(255.0*rand() / RAND_MAX);
-	else
-	{
-	for (int jj = -hb; jj <= hb; jj++)
-	{
-	for (int ii = -hb; ii <= hb; ii++)
-	{
-	Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color);//ceres takes row, column
-	for (int kk = 0; kk < nchannels; kk++)
-	Patches[ii + hb + (jj + hb)*patchWidth + kk*patchSize + ll*patchSizeChannels] = color[kk];
-	}
-	}
-	}
-	}
-	}
+if (tu<(T)boundary || tu>(T)(imgSize.x - boundary) || tv<(T)boundary || tv>(T)(imgSize.y - boundary))
+for (int jj = -hb; jj <= hb; jj++)
+for (int ii = -hb; ii <= hb; ii++)
+for (int kk = 0; kk < nchannels; kk++)
+Patches[ii + hb + (jj + hb)*patchWidth + kk*patchSize + ll*patchSizeChannels] = (T)(255.0*rand() / RAND_MAX);
+else
+{
+for (int jj = -hb; jj <= hb; jj++)
+{
+for (int ii = -hb; ii <= hb; ii++)
+{
+Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color);//ceres takes row, column
+for (int kk = 0; kk < nchannels; kk++)
+Patches[ii + hb + (jj + hb)*patchWidth + kk*patchSize + ll*patchSizeChannels] = color[kk];
+}
+}
+}
+}
+}
 
-	//compute mean
-	T meanPatch[9 * 9 * 3], varPatch[9*9 * 3];
-	for (int ii = 0; ii < patchSizeChannels; ii++)
-	meanPatch[ii] = (T)0, varPatch[ii] = (T)0;
+//compute mean
+T meanPatch[9 * 9 * 3], varPatch[9*9 * 3];
+for (int ii = 0; ii < patchSizeChannels; ii++)
+meanPatch[ii] = (T)0, varPatch[ii] = (T)0;
 
-	for (int ll = 0; ll < nNonRef + 1; ll++)
-	{
-	for (int kk = 0; kk < nchannels; kk++)
-	for (int jj = -hb; jj <= hb; jj++)
-	for (int ii = -hb; ii <= hb; ii++)
-	meanPatch[ii + hb + (jj + hb) *patchWidth + kk*patchSize] += Patches[ii + hb + (jj + hb)*patchWidth + kk*patchSize + ll*patchSizeChannels] / (T)(nNonRef + 1);
+for (int ll = 0; ll < nNonRef + 1; ll++)
+{
+for (int kk = 0; kk < nchannels; kk++)
+for (int jj = -hb; jj <= hb; jj++)
+for (int ii = -hb; ii <= hb; ii++)
+meanPatch[ii + hb + (jj + hb) *patchWidth + kk*patchSize] += Patches[ii + hb + (jj + hb)*patchWidth + kk*patchSize + ll*patchSizeChannels] / (T)(nNonRef + 1);
 
-	}
-	for (int ll = 0; ll < nNonRef + 1; ll++)
-	{
-	for (int kk = 0; kk < nchannels; kk++)
-	for (int jj = -hb; jj <= hb; jj++)
-	for (int ii = -hb; ii <= hb; ii++)
-	varPatch[ii + hb + (jj + hb) *patchWidth + kk*patchSize] += pow(Patches[ii + hb + (jj + hb)*patchWidth + kk*patchSize + ll*patchSizeChannels] - meanPatch[ii + hb + (jj + hb) *patchWidth + kk*patchSize], 2);
-	}
-	for (int kk = 0; kk < nchannels; kk++)
-	{
-	residuals[kk] = (T)0;
-	for (int jj = -hb; jj <= hb; jj++)
-	for (int ii = -hb; ii <= hb; ii++)
-	residuals[kk] += varPatch[ii + hb + (jj + hb) *patchWidth + kk*patchSize];
-	residuals[kk] = residuals[kk] / (T)patchSize / (T)nNonRef;
-	}
+}
+for (int ll = 0; ll < nNonRef + 1; ll++)
+{
+for (int kk = 0; kk < nchannels; kk++)
+for (int jj = -hb; jj <= hb; jj++)
+for (int ii = -hb; ii <= hb; ii++)
+varPatch[ii + hb + (jj + hb) *patchWidth + kk*patchSize] += pow(Patches[ii + hb + (jj + hb)*patchWidth + kk*patchSize + ll*patchSizeChannels] - meanPatch[ii + hb + (jj + hb) *patchWidth + kk*patchSize], 2);
+}
+for (int kk = 0; kk < nchannels; kk++)
+{
+residuals[kk] = (T)0;
+for (int jj = -hb; jj <= hb; jj++)
+for (int ii = -hb; ii <= hb; ii++)
+residuals[kk] += varPatch[ii + hb + (jj + hb) *patchWidth + kk*patchSize];
+residuals[kk] = residuals[kk] / (T)patchSize / (T)nNonRef;
+}
 
-	delete[]Patches;
+delete[]Patches;
 
-	return true;
-	}
-	private:
-	uchar *refImg; vector<uchar *> &nonRefImgs;
-	Point2i uv, imgSize;
-	double xycnRef[3], isigma; vector<double *> NonRefIntrinisc;
-	int  nchannels, hb, nNonRef, boundary;
-	};
-	double DirectAlignmentPyrVar(char *Path, DirectAlignPara &alignmentParas, vector<ImgData> &allImgs, vector<CameraData> &allCalibInfo, int fixPose, int fixDepth, int pyrID, int SmallAngle = 0, int verbose = 0)
-	{
-	char Fname[512];
+return true;
+}
+private:
+uchar *refImg; vector<uchar *> &nonRefImgs;
+Point2i uv, imgSize;
+double xycnRef[3], isigma; vector<double *> NonRefIntrinisc;
+int  nchannels, hb, nNonRef, boundary;
+};
+double DirectAlignmentPyrVar(char *Path, DirectAlignPara &alignmentParas, vector<ImgData> &allImgs, vector<CameraData> &allCalibInfo, int fixPose, int fixDepth, int pyrID, int SmallAngle = 0, int verbose = 0)
+{
+char Fname[512];
 
-	double dataWeight = alignmentParas.dataWeight, regIntraWeight = alignmentParas.regIntraWeight, regInterWeight = alignmentParas.regInterWeight;
-	double colorSigma = alignmentParas.colorSigma, depthSigma = alignmentParas.depthSigma; //expected std of variables (grayscale, mm);
-	double lowDepth = alignmentParas.lowDepth, highDepth = alignmentParas.highDepth;
-	int nchannels = allImgs[0].nchannels;
+double dataWeight = alignmentParas.dataWeight, regIntraWeight = alignmentParas.regIntraWeight, regInterWeight = alignmentParas.regInterWeight;
+double colorSigma = alignmentParas.colorSigma, depthSigma = alignmentParas.InvDepthSigma; //expected std of variables (grayscale, mm);
+double lowDepth = alignmentParas.lowDepth, highDepth = alignmentParas.highDepth;
+int nchannels = allImgs[0].nchannels;
 
-	//find texture region in the refImg and store in the vector
-	vector<float *> Grad2All;
-	//for (int cid = 0; cid < (int)allImgs.size(); cid++)
-	{
-	int cid = 0;
-	int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, boundary = width / 50;
-	float *Grad2 = new float[width*height], dx, dy;
-	for (int jj = boundary; jj < height - boundary; jj++)
-	{
-	for (int ii = boundary; ii < width - boundary; ii++)
-	{
-	//calculate first order image derivatives: using 1 channel should be enough
-	dx = (float)(int)allImgs[cid].imgPyr[pyrID].data[(ii + 1)*nchannels + jj*nchannels*width] - (float)(int)allImgs[cid].imgPyr[pyrID].data[(ii - 1)*nchannels + jj*nchannels*width]; //1, 0, -1
-	dy = (float)(int)allImgs[cid].imgPyr[pyrID].data[ii *nchannels + (jj + 1)*nchannels*width] - (float)(int)allImgs[cid].imgPyr[pyrID].data[ii *nchannels + (jj - 1)*nchannels*width]; //1, 0, -1
-	Grad2[ii + jj*width] = dx*dx + dy*dy;
-	}
-	}
-	Grad2All.push_back(Grad2);
-	}
+//find texture region in the refImg and store in the vector
+vector<float *> Grad2All;
+//for (int cid = 0; cid < (int)allImgs.size(); cid++)
+{
+int cid = 0;
+int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, boundary = width / 50;
+float *Grad2 = new float[width*height], dx, dy;
+for (int jj = boundary; jj < height - boundary; jj++)
+{
+for (int ii = boundary; ii < width - boundary; ii++)
+{
+//calculate first order image derivatives: using 1 channel should be enough
+dx = (float)(int)allImgs[cid].imgPyr[pyrID].data[(ii + 1)*nchannels + jj*nchannels*width] - (float)(int)allImgs[cid].imgPyr[pyrID].data[(ii - 1)*nchannels + jj*nchannels*width]; //1, 0, -1
+dy = (float)(int)allImgs[cid].imgPyr[pyrID].data[ii *nchannels + (jj + 1)*nchannels*width] - (float)(int)allImgs[cid].imgPyr[pyrID].data[ii *nchannels + (jj - 1)*nchannels*width]; //1, 0, -1
+Grad2[ii + jj*width] = dx*dx + dy*dy;
+}
+}
+Grad2All.push_back(Grad2);
+}
 
-	//Getting valid pixels (high texture && has depth &&good conf)
-	vector<Point2i> segQueue; segQueue.reserve(1e6);
-	vector<bool> processedQueue; processedQueue.reserve(1e6);
-	float mag2Thresh = alignmentParas.gradientThresh2; //suprisingly, using more relaxed thresholding better convergence than aggressive one.
-	vector<bool *> validPixelsAll;
-	vector<int*> sub2indAll;
-	vector<int> *indIAll = new vector<int>[allImgs.size()], *indJAll = new vector<int>[allImgs.size()];
-	vector<float> *GradAll = new vector<float>[allImgs.size()];
-	vector<double> *invDAll = new vector<double>[allImgs.size()];
-	//for (int cid = 0; cid < (int)allImgs.size(); cid++)
-	{
-	int cid = 0;
-	int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, boundary = width / 50;
-	int *sub2ind = new int[width*height];
-	bool *validPixels = new bool[width*height];
-	for (int ii = 0; ii < width*height; ii++)
-	validPixels[ii] = false, sub2ind[ii] = -1;
+//Getting valid pixels (high texture && has depth &&good conf)
+vector<Point2i> segQueue; segQueue.reserve(1e6);
+vector<bool> processedQueue; processedQueue.reserve(1e6);
+float mag2Thresh = alignmentParas.gradientThresh2; //suprisingly, using more relaxed thresholding better convergence than aggressive one.
+vector<bool *> validPixelsAll;
+vector<int*> sub2indAll;
+vector<int> *indIAll = new vector<int>[allImgs.size()], *indJAll = new vector<int>[allImgs.size()];
+vector<float> *GradAll = new vector<float>[allImgs.size()];
+vector<double> *invDAll = new vector<double>[allImgs.size()];
+//for (int cid = 0; cid < (int)allImgs.size(); cid++)
+{
+int cid = 0;
+int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, boundary = width / 50;
+int *sub2ind = new int[width*height];
+bool *validPixels = new bool[width*height];
+for (int ii = 0; ii < width*height; ii++)
+validPixels[ii] = false, sub2ind[ii] = -1;
 
-	invDAll[cid].reserve(width*height), GradAll[cid].reserve(width*height);
-	indIAll[cid].reserve(width*height), indJAll[cid].reserve(width*height);
+invDAll[cid].reserve(width*height), GradAll[cid].reserve(width*height);
+indIAll[cid].reserve(width*height), indJAll[cid].reserve(width*height);
 
-	for (int jj = boundary; jj < height - boundary; jj++)
-	{
-	for (int ii = boundary; ii < width - boundary; ii++)
-	{
-	ii = (int)(992 * allImgs[0].scaleFactor[pyrID]), jj = (int)(338 * allImgs[0].scaleFactor[pyrID]);
-	float mag2 = Grad2All[cid][ii + jj*width], depth = allImgs[cid].depthPyr[pyrID][ii + jj*width];
-	if (mag2 > mag2Thresh)
-	indIAll[cid].push_back(ii), indJAll[cid].push_back(jj), invDAll[cid].push_back(1.0 / depth), GradAll[cid].push_back(sqrt(mag2)), sub2ind[ii + jj*width] = (int)indIAll[cid].size() - 1;
-	break;
-	}
-	break;
-	}
+for (int jj = boundary; jj < height - boundary; jj++)
+{
+for (int ii = boundary; ii < width - boundary; ii++)
+{
+ii = (int)(992 * allImgs[0].scaleFactor[pyrID]), jj = (int)(338 * allImgs[0].scaleFactor[pyrID]);
+float mag2 = Grad2All[cid][ii + jj*width], depth = allImgs[cid].InvDepthPyr[pyrID][ii + jj*width];
+if (mag2 > mag2Thresh)
+indIAll[cid].push_back(ii), indJAll[cid].push_back(jj), invDAll[cid].push_back(1.0 / depth), GradAll[cid].push_back(sqrt(mag2)), sub2ind[ii + jj*width] = (int)indIAll[cid].size() - 1;
+break;
+}
+break;
+}
 
-	validPixelsAll.push_back(validPixels), sub2indAll.push_back(sub2ind);
-	}
+validPixelsAll.push_back(validPixels), sub2indAll.push_back(sub2ind);
+}
 
-	//detecting nearby pixels for regularization
-	vector<vector<int> > nNNAll;
-	vector<vector<int*> > NNAll;
-	//for (int cid = 0; cid < (int)allImgs.size(); cid++)
-	{
-	int cid = 0;
-	int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, boundary = width / 50;
-	vector<int*> NN; NN.reserve(width*height);
-	vector<int> nNN; nNN.reserve(width*height);
-	for (int jj = boundary; jj < height - boundary; jj++)
-	{
-	for (int ii = boundary; ii < width - boundary; ii++)
-	{
-	if (validPixelsAll[cid][ii + jj*width])
-	{
-	int count = 0;
-	int *nn = new int[4];
-	nn[count] = sub2indAll[cid][ii + jj*width], count++;
-	if (validPixelsAll[cid][ii - 1 + jj*width])
-	nn[count] = sub2indAll[cid][ii - 1 + jj*width], count++;
-	if (validPixelsAll[cid][ii + 1 + jj*width])
-	nn[count] = sub2indAll[cid][ii + 1 + jj*width], count++;
-	if (validPixelsAll[cid][ii + (jj - 1)*width])
-	nn[count] = sub2indAll[cid][ii + (jj - 1)*width], count++;
-	if (validPixelsAll[cid][ii + (jj + 1)*width])
-	nn[count] = sub2indAll[cid][ii + (jj + 1)*width], count++;
-	NN.push_back(nn);
-	nNN.push_back(count);
-	}
-	}
-	}
-	nNNAll.push_back(nNN), NNAll.push_back(NN);
-	}
+//detecting nearby pixels for regularization
+vector<vector<int> > nNNAll;
+vector<vector<int*> > NNAll;
+//for (int cid = 0; cid < (int)allImgs.size(); cid++)
+{
+int cid = 0;
+int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, boundary = width / 50;
+vector<int*> NN; NN.reserve(width*height);
+vector<int> nNN; nNN.reserve(width*height);
+for (int jj = boundary; jj < height - boundary; jj++)
+{
+for (int ii = boundary; ii < width - boundary; ii++)
+{
+if (validPixelsAll[cid][ii + jj*width])
+{
+int count = 0;
+int *nn = new int[4];
+nn[count] = sub2indAll[cid][ii + jj*width], count++;
+if (validPixelsAll[cid][ii - 1 + jj*width])
+nn[count] = sub2indAll[cid][ii - 1 + jj*width], count++;
+if (validPixelsAll[cid][ii + 1 + jj*width])
+nn[count] = sub2indAll[cid][ii + 1 + jj*width], count++;
+if (validPixelsAll[cid][ii + (jj - 1)*width])
+nn[count] = sub2indAll[cid][ii + (jj - 1)*width], count++;
+if (validPixelsAll[cid][ii + (jj + 1)*width])
+nn[count] = sub2indAll[cid][ii + (jj + 1)*width], count++;
+NN.push_back(nn);
+nNN.push_back(count);
+}
+}
+}
+nNNAll.push_back(nNN), NNAll.push_back(NN);
+}
 
-	for (int ii = 0; ii < (int)allImgs.size(); ii++)
-	{
-	for (int jj = 0; jj < (int)allImgs.size(); jj++)
-	allCalibInfo[ii].photometric.push_back(1.0), allCalibInfo[ii].photometric.push_back(0);
+for (int ii = 0; ii < (int)allImgs.size(); ii++)
+{
+for (int jj = 0; jj < (int)allImgs.size(); jj++)
+allCalibInfo[ii].photometric.push_back(1.0), allCalibInfo[ii].photometric.push_back(0);
 
-	GetIntrinsicScaled(allCalibInfo[ii].intrinsic, allCalibInfo[ii].activeIntrinsic, allImgs[ii].scaleFactor[pyrID]);
-	GetKFromIntrinsic(allCalibInfo[ii].activeK, allCalibInfo[ii].activeIntrinsic);
-	GetiK(allCalibInfo[ii].activeinvK, allCalibInfo[ii].activeK);
-	}
+GetIntrinsicScaled(allCalibInfo[ii].intrinsic, allCalibInfo[ii].activeIntrinsic, allImgs[ii].scaleFactor[pyrID]);
+GetKFromIntrinsic(allCalibInfo[ii].activeK, allCalibInfo[ii].activeIntrinsic);
+GetiK(allCalibInfo[ii].activeinvK, allCalibInfo[ii].activeK);
+}
 
-	//if (pyrID == 5)
-	{
-	//Sliding the parameters
-	int width = allImgs[0].imgPyr[pyrID].cols, height = allImgs[0].imgPyr[pyrID].rows;
+//if (pyrID == 5)
+{
+//Sliding the parameters
+int width = allImgs[0].imgPyr[pyrID].cols, height = allImgs[0].imgPyr[pyrID].rows;
 
-	Grid2D<uchar, 1>  img1(allImgs[0].imgPyr[pyrID].data, 0, height, 0, width);
-	BiCubicInterpolator<Grid2D < uchar, 1 > > imgInterp1(img1);
+Grid2D<uchar, 1>  img1(allImgs[0].imgPyr[pyrID].data, 0, height, 0, width);
+BiCubicInterpolator<Grid2D < uchar, 1 > > imgInterp1(img1);
 
-	Grid2D<uchar, 3>  img3(allImgs[0].imgPyr[pyrID].data, 0, height, 0, width);
-	BiCubicInterpolator<Grid2D < uchar, 3 > > imgInterp3(img3);
+Grid2D<uchar, 3>  img3(allImgs[0].imgPyr[pyrID].data, 0, height, 0, width);
+BiCubicInterpolator<Grid2D < uchar, 3 > > imgInterp3(img3);
 
-	omp_set_num_threads(omp_get_max_threads());
+omp_set_num_threads(omp_get_max_threads());
 
-	int hb = (int)min(2.0, 2.0* allImgs[0].scaleFactor[pyrID]), nsteps = 500, count = 0, per = 10;
-	double step = (1.0 / lowDepth - 1.0 / highDepth) / nsteps;
-	hb = 4;
-	double *allCost = new double[nsteps]; allCost[0] = 9e9;
-	for (int ii = 0; ii < (int)invDAll[0].size(); ii++)
-	{
-	#pragma omp critical
-	{
-	count++;
-	if (100.0*count / (int)invDAll[0].size() >= per)
-	{
-	printf("%d%%.. ", per);
-	per += 10;
-	}
-	}
+int hb = (int)min(2.0, 2.0* allImgs[0].scaleFactor[pyrID]), nsteps = 500, count = 0, per = 10;
+double step = (1.0 / lowDepth - 1.0 / highDepth) / nsteps;
+hb = 4;
+double *allCost = new double[nsteps]; allCost[0] = 9e9;
+for (int ii = 0; ii < (int)invDAll[0].size(); ii++)
+{
+#pragma omp critical
+{
+count++;
+if (100.0*count / (int)invDAll[0].size() >= per)
+{
+printf("%d%%.. ", per);
+per += 10;
+}
+}
 
-	vector<uchar *> nonRefImagesPtr;
-	vector<double *> nonRefIntrinsicPtr;
-	for (int cid = 1; cid < (int)allImgs.size(); cid++)
-	nonRefImagesPtr.push_back(allImgs[cid].imgPyr[pyrID].data),
-	nonRefIntrinsicPtr.push_back(allCalibInfo[cid].activeIntrinsic);
+vector<uchar *> nonRefImagesPtr;
+vector<double *> nonRefIntrinsicPtr;
+for (int cid = 1; cid < (int)allImgs.size(); cid++)
+nonRefImagesPtr.push_back(allImgs[cid].imgPyr[pyrID].data),
+nonRefIntrinsicPtr.push_back(allCalibInfo[cid].activeIntrinsic);
 
-	sprintf(Fname, "C:/temp/costD_%d.txt", pyrID);  FILE *fp = fopen(Fname, "w+");
-	#pragma omp parallel for schedule(dynamic,1)
-	for (int kk = 0; kk < nsteps; kk++)
-	{
-	double residuals = 0;
-	double invD = step*kk + 1.0 / highDepth;
-	int i = indIAll[0][ii], j = indJAll[0][ii];
-	double xycnRef[3] = { 0, 0, 0 }, ij[3] = { i, j, 1 };
-	mat_mul(allCalibInfo[0].activeinvK, ij, xycnRef, 3, 3, 1);
+sprintf(Fname, "C:/temp/costD_%d.txt", pyrID);  FILE *fp = fopen(Fname, "w+");
+#pragma omp parallel for schedule(dynamic,1)
+for (int kk = 0; kk < nsteps; kk++)
+{
+double residuals = 0;
+double invD = step*kk + 1.0 / highDepth;
+int i = indIAll[0][ii], j = indJAll[0][ii];
+double xycnRef[3] = { 0, 0, 0 }, ij[3] = { i, j, 1 };
+mat_mul(allCalibInfo[0].activeinvK, ij, xycnRef, 3, 3, 1);
 
-	ceres::DynamicAutoDiffCostFunction<DepthImgWarping_VAR, 4> *cost_function = new ceres::DynamicAutoDiffCostFunction < DepthImgWarping_VAR, 4 >
-	(new DepthImgWarping_VAR(Point2i(i, j), xycnRef, allImgs[0].imgPyr[pyrID].data, nonRefImagesPtr, nonRefIntrinsicPtr, Point2i(width, height), nchannels, 1.0 / colorSigma, hb));
+ceres::DynamicAutoDiffCostFunction<DepthImgWarping_VAR, 4> *cost_function = new ceres::DynamicAutoDiffCostFunction < DepthImgWarping_VAR, 4 >
+(new DepthImgWarping_VAR(Point2i(i, j), xycnRef, allImgs[0].imgPyr[pyrID].data, nonRefImagesPtr, nonRefIntrinsicPtr, Point2i(width, height), nchannels, 1.0 / colorSigma, hb));
 
-	cost_function->SetNumResiduals(nchannels);
+cost_function->SetNumResiduals(nchannels);
 
-	vector<double*> parameter_blocks;
-	parameter_blocks.push_back(&invD), cost_function->AddParameterBlock(1);
-	parameter_blocks.push_back(allCalibInfo[0].rt), cost_function->AddParameterBlock(6);
-	for (int cid = 1; cid < (int)allImgs.size(); cid++)
-	parameter_blocks.push_back(allCalibInfo[cid].rt), cost_function->AddParameterBlock(6);
+vector<double*> parameter_blocks;
+parameter_blocks.push_back(&invD), cost_function->AddParameterBlock(1);
+parameter_blocks.push_back(allCalibInfo[0].rt), cost_function->AddParameterBlock(6);
+for (int cid = 1; cid < (int)allImgs.size(); cid++)
+parameter_blocks.push_back(allCalibInfo[cid].rt), cost_function->AddParameterBlock(6);
 
-	double resi[3];
-	cost_function->Evaluate(&parameter_blocks[0], resi, NULL);
-	for (int jj = 0; jj < nchannels; jj++)
-	residuals += resi[jj] * resi[jj];
-	delete[]cost_function;
+double resi[3];
+cost_function->Evaluate(&parameter_blocks[0], resi, NULL);
+for (int jj = 0; jj < nchannels; jj++)
+residuals += resi[jj] * resi[jj];
+delete[]cost_function;
 
-	allCost[kk] = residuals;
-	#pragma omp critical
-	fprintf(fp, "%.4f %.16e\n", invD, residuals);
-	}
-	fclose(fp);
+allCost[kk] = residuals;
+#pragma omp critical
+fprintf(fp, "%.4f %.16e\n", invD, residuals);
+}
+fclose(fp);
 
-	double minCost = 9e9, bestInvD = 0;
-	for (int kk = 0; kk < nsteps; kk++)
-	{
-	if (minCost > allCost[kk])
-	minCost = allCost[kk], bestInvD = step*kk + 1.0 / highDepth;
-	}
-	invDAll[0][ii] = bestInvD;
-	}
-	printf("100%%\n");
-	delete[]allCost;
+double minCost = 9e9, bestInvD = 0;
+for (int kk = 0; kk < nsteps; kk++)
+{
+if (minCost > allCost[kk])
+minCost = allCost[kk], bestInvD = step*kk + 1.0 / highDepth;
+}
+invDAll[0][ii] = bestInvD;
+}
+printf("100%%\n");
+delete[]allCost;
 
-	//Saving data
-	for (int ii = 0; ii < (int)invDAll[0].size(); ii++)
-	allImgs[0].depthPyr[pyrID][indIAll[0][ii] + indJAll[0][ii] * width] = 1.0 / invDAll[0][ii];
-	exit(0);
-	return 0;
-	}
+//Saving data
+for (int ii = 0; ii < (int)invDAll[0].size(); ii++)
+allImgs[0].InvDepthPyr[pyrID][indIAll[0][ii] + indJAll[0][ii] * width] = 1.0 / invDAll[0][ii];
+exit(0);
+return 0;
+}
 
 
-	for (int ii = 0; ii < (int)validPixelsAll.size(); ii++)
-	delete[] validPixelsAll[ii];
-	for (int ii = 0; ii < (int)sub2indAll.size(); ii++)
-	delete[] sub2indAll[ii];
-	delete[]indIAll, delete[]indJAll, delete[]invDAll, delete[]GradAll;
-	for (int ii = 0; ii < (int)Grad2All.size(); ii++)
-	delete[]Grad2All[ii];
+for (int ii = 0; ii < (int)validPixelsAll.size(); ii++)
+delete[] validPixelsAll[ii];
+for (int ii = 0; ii < (int)sub2indAll.size(); ii++)
+delete[] sub2indAll[ii];
+delete[]indIAll, delete[]indJAll, delete[]invDAll, delete[]GradAll;
+for (int ii = 0; ii < (int)Grad2All.size(); ii++)
+delete[]Grad2All[ii];
 
-	return 0.0;
-	}
+return 0.0;
+}
 
-	struct DepthImgWarping_SSD2 {
-	DepthImgWarping_SSD2(Point2i uv, double *xycnRef_, uchar *refImg, Point2f *refImgGrad, uchar *nonRefImgs, double *intrinsic, Point2i &imgSize, int nchannels, double isigmaC, double isigmaG, int hb, int imgID) :
-	uv(uv), refImg(refImg), refImgGrad(refImgGrad), nonRefImgs(nonRefImgs), intrinsic(intrinsic), imgSize(imgSize), nchannels(nchannels), isigmaC(isigmaC), isigmaG(isigmaG), hb(hb), imgID(imgID)
-	{
-	boundary = max(imgSize.x, imgSize.y) / 50;
-	for (int ii = 0; ii < 3; ii++)
-	xycnRef[ii] = xycnRef_[ii];//xycn changes for every pixel. Pass by ref does not work
-	}
-	template <typename T>  bool operator()(T const* const* Parameters, T* residuals) const
-	{
-	//Parametes[0][0]: inverse depth for ref, Parameters[1][0..5]: poses for ref, Parameters[2][0..5]: poses for non-ref, Parameters[3][0..1]: photometric compenstation
-	T Rt[9];
-	ceres::AngleAxisToRotationMatrix(Parameters[1], Rt);//this gives R' due to its column major format
+struct DepthImgWarping_SSD2 {
+DepthImgWarping_SSD2(Point2i uv, double *xycnRef_, uchar *refImg, Point2f *refImgGrad, uchar *nonRefImgs, double *intrinsic, Point2i &imgSize, int nchannels, double isigmaC, double isigmaG, int hb, int imgID) :
+uv(uv), refImg(refImg), refImgGrad(refImgGrad), nonRefImgs(nonRefImgs), intrinsic(intrinsic), imgSize(imgSize), nchannels(nchannels), isigmaC(isigmaC), isigmaG(isigmaG), hb(hb), imgID(imgID)
+{
+boundary = max(imgSize.x, imgSize.y) / 50;
+for (int ii = 0; ii < 3; ii++)
+xycnRef[ii] = xycnRef_[ii];//xycn changes for every pixel. Pass by ref does not work
+}
+template <typename T>  bool operator()(T const* const* Parameters, T* residuals) const
+{
+//Parametes[0][0]: inverse depth for ref, Parameters[1][0..5]: poses for ref, Parameters[2][0..5]: poses for non-ref, Parameters[3][0..1]: photometric compenstation
+T Rt[9];
+ceres::AngleAxisToRotationMatrix(Parameters[1], Rt);//this gives R' due to its column major format
 
-	T RefRayDir[3] = { (T)0.0, (T) 0.0, (T) 0.0 };
-	for (int ii = 0; ii < 3; ii++)
-	for (int jj = 0; jj < 3; jj++)
-	RefRayDir[ii] += Rt[ii * 3 + jj] * (T)xycnRef[jj]; //ray direction: r = R'*iK*i;
+T RefRayDir[3] = { (T)0.0, (T) 0.0, (T) 0.0 };
+for (int ii = 0; ii < 3; ii++)
+for (int jj = 0; jj < 3; jj++)
+RefRayDir[ii] += Rt[ii * 3 + jj] * (T)xycnRef[jj]; //ray direction: r = R'*iK*i;
 
-	T C[3] = { (T)0.0, (T) 0.0, (T) 0.0 };
-	for (int ii = 0; ii < 3; ii++)
-	for (int jj = 0; jj < 3; jj++)
-	C[ii] += Rt[ii * 3 + jj] * Parameters[1][jj + 3]; ////-C = R't;
+T C[3] = { (T)0.0, (T) 0.0, (T) 0.0 };
+for (int ii = 0; ii < 3; ii++)
+for (int jj = 0; jj < 3; jj++)
+C[ii] += Rt[ii * 3 + jj] * Parameters[1][jj + 3]; ////-C = R't;
 
-	T XYZ[3], d = Parameters[0][0];
-	for (int ii = 0; ii < 3; ii++)
-	XYZ[ii] = RefRayDir[ii] / d - C[ii]; //X = r*d+c
+T XYZ[3], d = Parameters[0][0];
+for (int ii = 0; ii < 3; ii++)
+XYZ[ii] = RefRayDir[ii] / d - C[ii]; //X = r*d+c
 
-	//project to other views
-	T tp[3], xcn, ycn, tu, tv, color[3], dcolorX[3], dcolorY[3];
-	ceres::AngleAxisRotatePoint(Parameters[2], XYZ, tp);
-	tp[0] += Parameters[2][3], tp[1] += Parameters[2][4], tp[2] += Parameters[2][5];
-	xcn = tp[0] / tp[2], ycn = tp[1] / tp[2];
+//project to other views
+T tp[3], xcn, ycn, tu, tv, color[3], dcolorX[3], dcolorY[3];
+ceres::AngleAxisRotatePoint(Parameters[2], XYZ, tp);
+tp[0] += Parameters[2][3], tp[1] += Parameters[2][4], tp[2] += Parameters[2][5];
+xcn = tp[0] / tp[2], ycn = tp[1] / tp[2];
 
-	tu = (T)intrinsic[0] * xcn + (T)intrinsic[2] * ycn + (T)intrinsic[3];
-	tv = (T)intrinsic[1] * ycn + (T)intrinsic[4];
+tu = (T)intrinsic[0] * xcn + (T)intrinsic[2] * ycn + (T)intrinsic[3];
+tv = (T)intrinsic[1] * ycn + (T)intrinsic[4];
 
-	if (nchannels == 1)
-	{
-	Grid2D<uchar, 1>  img(nonRefImgs, 0, imgSize.y, 0, imgSize.x);
-	BiCubicInterpolator<Grid2D < uchar, 1 > > Imgs(img);
+if (nchannels == 1)
+{
+Grid2D<uchar, 1>  img(nonRefImgs, 0, imgSize.y, 0, imgSize.x);
+BiCubicInterpolator<Grid2D < uchar, 1 > > Imgs(img);
 
-	if (tu<(T)boundary || tu>(T)(imgSize.x - boundary) || tv<(T)boundary || tv>(T)(imgSize.y - boundary))
-	residuals[0] = (T)1000, residuals[1] = (T)1000, residuals[2] = (T)1000;
-	else
-	{
-	residuals[0] = (T)0, residuals[1] = (T)0, residuals[2] = (T)0;
-	for (int jj = -hb; jj <= hb; jj++)
-	{
-	for (int ii = -hb; ii <= hb; ii++)
-	{
-	Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color, dcolorY, dcolorX);//ceres takes row, column
-	uchar refColor = refImg[uv.x + ii + (uv.y + jj)*imgSize.x];
-	residuals[0] += Parameters[3][0] * color[0] + Parameters[3][1] - (T)(double)(int)refColor;
-	residuals[1] += (T)refImgGrad[uv.x + ii + (uv.y + jj)*imgSize.x].x - dcolorX[0];
-	residuals[2] += (T)refImgGrad[uv.x + ii + (uv.y + jj)*imgSize.x].y - dcolorY[0];
-	}
-	}
+if (tu<(T)boundary || tu>(T)(imgSize.x - boundary) || tv<(T)boundary || tv>(T)(imgSize.y - boundary))
+residuals[0] = (T)1000, residuals[1] = (T)1000, residuals[2] = (T)1000;
+else
+{
+residuals[0] = (T)0, residuals[1] = (T)0, residuals[2] = (T)0;
+for (int jj = -hb; jj <= hb; jj++)
+{
+for (int ii = -hb; ii <= hb; ii++)
+{
+Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color, dcolorY, dcolorX);//ceres takes row, column
+uchar refColor = refImg[uv.x + ii + (uv.y + jj)*imgSize.x];
+residuals[0] += Parameters[3][0] * color[0] + Parameters[3][1] - (T)(double)(int)refColor;
+residuals[1] += (T)refImgGrad[uv.x + ii + (uv.y + jj)*imgSize.x].x - dcolorX[0];
+residuals[2] += (T)refImgGrad[uv.x + ii + (uv.y + jj)*imgSize.x].y - dcolorY[0];
+}
+}
 
-	residuals[0] = (T)isigmaC*residuals[0], residuals[0] = (T)isigmaG*residuals[0], residuals[0] = (T)isigmaG*residuals[0];
-	}
-	}
-	else
-	{
-	Grid2D<uchar, 3>  img(nonRefImgs, 0, imgSize.y, 0, imgSize.x);
-	BiCubicInterpolator<Grid2D < uchar, 3 > > Imgs(img);
+residuals[0] = (T)isigmaC*residuals[0], residuals[0] = (T)isigmaG*residuals[0], residuals[0] = (T)isigmaG*residuals[0];
+}
+}
+else
+{
+Grid2D<uchar, 3>  img(nonRefImgs, 0, imgSize.y, 0, imgSize.x);
+BiCubicInterpolator<Grid2D < uchar, 3 > > Imgs(img);
 
-	if (tu<(T)boundary || tu>(T)(imgSize.x - boundary) || tv<(T)boundary || tv>(T)(imgSize.y - boundary))
-	for (int jj = 0; jj < 3 * nchannels; jj++)
-	residuals[jj] = (T)1000;
-	else
-	{
-	residuals[0] = (T)0, residuals[1] = (T)0, residuals[2] = (T)0;
-	for (int jj = -hb; jj <= hb; jj++)
-	{
-	for (int ii = -hb; ii <= hb; ii++)
-	{
-	Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color, dcolorY, dcolorX);//ceres takes row, column
-	for (int kk = 0; kk < nchannels; kk++)
-	{
-	uchar refColor = refImg[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk];
-	residuals[3 * kk] += Parameters[3][0] * color[kk] + Parameters[3][1] - (T)(double)(int)refColor;
-	residuals[3 * kk + 1] += (T)refImgGrad[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk].x - dcolorX[kk];
-	residuals[3 * kk + 2] += (T)refImgGrad[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk].y - dcolorY[kk];
-	}
-	}
-	}
-	for (int kk = 0; kk < nchannels; kk++)
-	residuals[3 * kk] = (T)isigmaC*residuals[3 * kk],
-	residuals[3 * kk + 1] = (T)isigmaG*residuals[3 * kk + 1], residuals[3 * kk + 2] = (T)isigmaG*residuals[3 * kk + 2];
-	}
-	}
+if (tu<(T)boundary || tu>(T)(imgSize.x - boundary) || tv<(T)boundary || tv>(T)(imgSize.y - boundary))
+for (int jj = 0; jj < 3 * nchannels; jj++)
+residuals[jj] = (T)1000;
+else
+{
+residuals[0] = (T)0, residuals[1] = (T)0, residuals[2] = (T)0;
+for (int jj = -hb; jj <= hb; jj++)
+{
+for (int ii = -hb; ii <= hb; ii++)
+{
+Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color, dcolorY, dcolorX);//ceres takes row, column
+for (int kk = 0; kk < nchannels; kk++)
+{
+uchar refColor = refImg[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk];
+residuals[3 * kk] += Parameters[3][0] * color[kk] + Parameters[3][1] - (T)(double)(int)refColor;
+residuals[3 * kk + 1] += (T)refImgGrad[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk].x - dcolorX[kk];
+residuals[3 * kk + 2] += (T)refImgGrad[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk].y - dcolorY[kk];
+}
+}
+}
+for (int kk = 0; kk < nchannels; kk++)
+residuals[3 * kk] = (T)isigmaC*residuals[3 * kk],
+residuals[3 * kk + 1] = (T)isigmaG*residuals[3 * kk + 1], residuals[3 * kk + 2] = (T)isigmaG*residuals[3 * kk + 2];
+}
+}
 
-	return true;
-	}
-	private:
-	uchar *refImg, *nonRefImgs;
-	Point2f *refImgGrad;
-	Point2i uv, imgSize;
-	double xycnRef[3], *intrinsic, isigmaC, isigmaG;
-	int  nchannels, hb, imgID, boundary;
-	};*/
+return true;
+}
+private:
+uchar *refImg, *nonRefImgs;
+Point2f *refImgGrad;
+Point2i uv, imgSize;
+double xycnRef[3], *intrinsic, isigmaC, isigmaG;
+int  nchannels, hb, imgID, boundary;
+};*/
 
 struct IntraDepthRegularize {
 	IntraDepthRegularize(double isigma) : isigma(isigma){}
@@ -1485,7 +1487,7 @@ struct IntraDepthRegularize {
 	{
 		T num = idepth2[0] - idepth1[0];
 		T denum = idepth1[0] * idepth2[0];
-		residuals[0] = (T)isigma*num / (denum + (T) 1.0e-16); //1/id1 - 1/id2 ~ (id2 - id1)/(id1*id2 + esp)
+		residuals[0] = (T)isigma*num / denum; //1/id1 - 1/id2 ~ (id2 - id1)/(id1*id2 )
 		return true;
 	}
 	static ceres::CostFunction* Create(const double isigma)
@@ -1719,7 +1721,6 @@ struct DepthImgWarpingSmall {
 	DepthImgWarpingSmall(Point2i uv, double *xycnRef_, uchar *refImg, uchar *nonRefImgs, double *intrinsic, Point2i &imgSize, int nchannels, double isigma, int hb, int imgID) :
 		uv(uv), refImg(refImg), nonRefImgs(nonRefImgs), intrinsic(intrinsic), imgSize(imgSize), nchannels(nchannels), isigma(isigma), hb(hb), imgID(imgID)
 	{
-		hb = 0;
 		boundary = max(imgSize.x, imgSize.y) / 50;
 		for (int ii = 0; ii < 3; ii++)
 			xycnRef[ii] = xycnRef_[ii];//xycn changes for every pixel. Pass by ref does not work
@@ -1773,7 +1774,8 @@ struct DepthImgWarpingSmall {
 					{
 						Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color);//ceres takes row, column
 						uchar refColor = refImg[uv.x + ii + (uv.y + jj)*imgSize.x];
-						ssd += Parameters[3][0] * color[0] + Parameters[3][1] - (T)(double)(int)refColor;
+						//ssd += Parameters[3][0] * color[0] + Parameters[3][1] - (T)(double)(int)refColor;
+						ssd += color[0] - (T)(double)(int)refColor;
 					}
 				}
 
@@ -1801,7 +1803,8 @@ struct DepthImgWarpingSmall {
 						for (int kk = 0; kk < nchannels; kk++)
 						{
 							uchar refColor = refImg[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk];
-							residuals[kk] += Parameters[3][0] * color[kk] + Parameters[3][1] - (T)(double)(int)refColor;
+							//residuals[kk] += Parameters[3][0] * color[kk] + Parameters[3][1] - (T)(double)(int)refColor;
+							residuals[kk] += color[kk] - (T)(double)(int)refColor;
 							//	fprintf(fp2, "%.2f ", color[kk]);
 						}
 					}
@@ -1821,6 +1824,85 @@ private:
 	double xycnRef[3], *intrinsic, isigma;
 	int  nchannels, hb, imgID, boundary;
 };
+struct DepthImgWarpingSmall2
+{
+	DepthImgWarpingSmall2(Point2i uv, double *xycnRef_, uchar *refImg, uchar *nonRefImgs, double *intrinsic, Point2i &imgSize, int nchannels, double isigma, int hb, int imgID) :
+		uv(uv), refImg(refImg), nonRefImgs(nonRefImgs), intrinsic(intrinsic), imgSize(imgSize), nchannels(nchannels), isigma(isigma), hb(hb), imgID(imgID)
+	{
+		boundary = max(imgSize.x, imgSize.y) / 50;
+		for (int ii = 0; ii < 3; ii++)
+			xycnRef[ii] = xycnRef_[ii];//xycn changes for every pixel. Pass by ref does not work
+	}
+
+	template <typename T>	bool operator()(const T* const idepth, const T* const rt0, const T* const rt1, T* residuals) const
+	{
+		//Parametes[0][0]: inverse depth for ref, Parameters[1][0..5]: poses for ref, Parameters[2][0..5]: poses for non-ref, Parameters[3][0..1]: photometric compenstation
+		T Rt[9];
+		ceres::AngleAxisToRotationMatrix(rt0, Rt);//this gives R' due to its column major format
+
+		T RefRayDir[3] = { (T)0.0, (T) 0.0, (T) 0.0 };
+		for (int ii = 0; ii < 3; ii++)
+			for (int jj = 0; jj < 3; jj++)
+				RefRayDir[ii] += Rt[ii * 3 + jj] * (T)xycnRef[jj]; //ray direction: r = R'*iK*i;
+
+		T C[3] = { (T)0.0, (T) 0.0, (T) 0.0 };
+		for (int ii = 0; ii < 3; ii++)
+			for (int jj = 0; jj < 3; jj++)
+				C[ii] += Rt[ii * 3 + jj] * rt0[jj + 3]; ////-C = R't;
+
+		T XYZ[3];
+		for (int ii = 0; ii < 3; ii++)
+			XYZ[ii] = RefRayDir[ii] / idepth[0] - C[ii]; //X = r*d+c
+
+		//project to other views
+		T tp[3], xcn, ycn, tu, tv, color[3];
+		//T R_nr[9] = { (T)1, -rt1[2], rt1[1],
+		//	rt1[2], (T)1, -rt1[0],
+		//	-rt1[1], rt1[0], (T)1 };
+		tp[0] = XYZ[0] - rt1[2] * XYZ[1] + rt1[1] * XYZ[2] + rt1[3]; //tp[0] = R_nr[0] * XYZ[0] + R_nr[1] * XYZ[1] + R_nr[2] * XYZ[2] + rt1[3];
+		tp[1] = rt1[2] * XYZ[0] + XYZ[1] - rt1[0] * XYZ[2] + rt1[4]; //tp[1] = R_nr[3] * XYZ[0] + R_nr[4] * XYZ[1] + R_nr[5] * XYZ[2] + rt1[4];
+		tp[2] = -rt1[1] * XYZ[0] + rt1[0] * XYZ[1] + XYZ[2] + rt1[5]; //tp[2] = R_nr[6] * XYZ[0] + R_nr[7] * XYZ[1] + R_nr[8] * XYZ[2] + rt1[5];
+		xcn = tp[0] / tp[2], ycn = tp[1] / tp[2];
+
+		tu = (T)intrinsic[0] * xcn + (T)intrinsic[2] * ycn + (T)intrinsic[3];
+		tv = (T)intrinsic[1] * ycn + (T)intrinsic[4];
+
+		Grid2D<uchar, 3>  img(nonRefImgs, 0, imgSize.y, 0, imgSize.x);
+		BiCubicInterpolator<Grid2D < uchar, 3 > > Imgs(img);
+
+		if (tu<(T)boundary || tu>(T)(imgSize.x - boundary) || tv<(T)boundary || tv>(T)(imgSize.y - boundary))
+			for (int jj = 0; jj < nchannels; jj++)
+				residuals[jj] = (T)1000;
+		else
+		{
+			residuals[0] = (T)0, residuals[1] = (T)0, residuals[2] = (T)0;
+			for (int jj = -hb; jj <= hb; jj++)
+			{
+				for (int ii = -hb; ii <= hb; ii++)
+				{
+					Imgs.Evaluate(tv + (T)jj, tu + (T)ii, color);//ceres takes row, column
+					for (int kk = 0; kk < nchannels; kk++)
+					{
+						uchar refColor = refImg[(uv.x + ii + (uv.y + jj)*imgSize.x)*nchannels + kk];
+						residuals[kk] += color[kk] - (T)(double)(int)refColor;
+					}
+				}
+			}
+			for (int kk = 0; kk < nchannels; kk++)
+				residuals[kk] = residuals[kk] * (T)isigma / (T)((2 * hb + 1)*(2 * hb + 1));
+		}
+
+		return true;
+	}
+	static ceres::CostFunction* Create(Point2i uv, double *xycnRef, uchar *refImg, uchar *nonRefImgs, double *intrinsic, Point2i &imgSize, int nchannels, double isigma, int hb, int imgID)
+	{
+		return (new ceres::AutoDiffCostFunction<DepthImgWarpingSmall2, 3, 1, 3, 3>(new DepthImgWarpingSmall2(uv, xycnRef, refImg, nonRefImgs, intrinsic, imgSize, nchannels, isigma, hb, imgID)));
+	}
+	uchar *refImg, *nonRefImgs;
+	Point2i uv, imgSize;
+	double xycnRef[3], *intrinsic, isigma;
+	int  nchannels, hb, imgID, boundary;
+};
 double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<ImgData> &allImgs, vector<CameraData> &allCalibInfo, int fixPose, int fixDepth, int pyrID, int SmallAngle = 0, int WriteOutput = 0, int verbose = 0)
 {
 	char Fname[512];
@@ -1829,133 +1911,6 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 	double colorSigma = alignmentParas.colorSigma, depthSigma = alignmentParas.depthSigma; //expected std of variables (grayscale, mm);
 	double lowDepth = alignmentParas.lowDepth, highDepth = alignmentParas.highDepth;
 	int nchannels = allImgs[0].nchannels;
-
-	//find texture region in the refImg and store in the vector
-	vector<bool *> validPixelsAll;
-	vector<Point2i> segQueue; segQueue.reserve(1e6);
-	vector<bool> processedQueue; processedQueue.reserve(1e6);
-
-	for (int cid = 0; cid < 1; cid++)
-	{
-		int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, boundary = width / 50;
-		bool *validPixels = new bool[width*height];
-		for (int ii = 0; ii < width*height; ii++)
-			validPixels[ii] = false;
-
-		if (alignmentParas.removeSmallRegions)
-		{
-			bool *processedPixels = new bool[width*height];
-			for (int ii = 0; ii < width*height; ii++)
-				processedPixels[ii] = false;
-			double factor = allImgs[cid].scaleFactor[pyrID];
-			for (int jj = boundary; jj < height - boundary; jj++)
-			{
-				for (int ii = boundary; ii < width - boundary; ii++)
-				{
-					float mag = allImgs[cid].gradPyr[pyrID][ii + jj*width];
-					if (!processedPixels[ii + jj*width] && mag > alignmentParas.gradientThresh)
-					{
-						processedQueue.clear(), segQueue.clear();
-						processedQueue.push_back(false), segQueue.push_back(Point2i(ii, jj));
-						processedPixels[ii + jj*width] = true;
-						while (true)
-						{
-							int npts_before = (int)segQueue.size();
-							for (int kk = 0; kk < (int)segQueue.size(); kk++)
-							{
-								if (processedQueue[kk])
-									continue;
-								processedQueue[kk] = true;
-								for (int i = -1; i <= 1; i++)
-								{
-									for (int j = -1; j <= 1; j++)
-									{
-										int x = segQueue[kk].x + i, y = segQueue[kk].y + j;
-										if (x<boundary || x>width - boundary || y<boundary || y>height - boundary)
-											continue;
-										mag = allImgs[cid].gradPyr[pyrID][x + y*width];
-										bool boolean = processedPixels[x + y*width];
-										if (!boolean && mag > alignmentParas.gradientThresh)
-											segQueue.push_back(Point2i(x, y)), processedQueue.push_back(false), processedPixels[x + y*width] = true;
-									}
-								}
-							}
-							if ((int)segQueue.size() - npts_before == 0)
-								break;
-						}
-
-						if (segQueue.size() > (int)(100.0 * factor))//10x10 @ 1920x1080
-						{
-							for (int kk = 0; kk < (int)segQueue.size(); kk++)
-							{
-								int x = segQueue[kk].x, y = segQueue[kk].y;
-								validPixels[x + y*width] = true;
-							}
-						}
-					}
-				}
-			}
-			delete[]processedPixels;
-		}
-		else
-		{
-			for (int jj = boundary; jj < height - boundary; jj++)
-			{
-				for (int ii = boundary; ii < width - boundary; ii++)
-				{
-					float mag = allImgs[cid].gradPyr[pyrID][ii + jj*width];
-					if (mag > alignmentParas.gradientThresh)
-						validPixels[ii + jj*width] = true;
-				}
-			}
-		}
-
-		validPixelsAll.push_back(validPixels);
-	}
-
-	//detecting nearby pixels for regularization
-	vector<vector<int> > nNNAll;
-	vector<vector<int*> > NNAll;
-	//for (int cid = 0; cid < (int)allImgs.size(); cid++)
-	{
-		int cid = 0;
-		int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, boundary = width / 50;
-		vector<int*> NN; NN.reserve(width*height);
-		vector<int> nNN; nNN.reserve(width*height);
-		for (int jj = boundary; jj < height - boundary; jj++)
-		{
-			for (int ii = boundary; ii < width - boundary; ii++)
-			{
-				if (validPixelsAll[cid][ii + jj*width])
-				{
-					int count = 0;
-					int *nn = new int[8];
-					nn[count] = sub2indAll[cid][ii + jj*width], count++;
-					if (validPixelsAll[cid][ii - 1 + jj*width])
-						nn[count] = sub2indAll[cid][ii - 1 + jj*width], count++;
-					if (validPixelsAll[cid][ii + 1 + jj*width])
-						nn[count] = sub2indAll[cid][ii + 1 + jj*width], count++;
-					if (validPixelsAll[cid][ii + (jj - 1)*width])
-						nn[count] = sub2indAll[cid][ii + (jj - 1)*width], count++;
-					if (validPixelsAll[cid][ii + (jj + 1)*width])
-						nn[count] = sub2indAll[cid][ii + (jj + 1)*width], count++;
-					if (validPixelsAll[cid][ii - 1 + (jj - 1)*width])
-						nn[count] = sub2indAll[cid][ii - 1 + (jj - 1)*width], count++;
-					if (validPixelsAll[cid][ii + 1 + (jj - 1)*width])
-						nn[count] = sub2indAll[cid][ii + 1 + (jj - 1)*width], count++;
-					if (validPixelsAll[cid][ii - 1 + (jj + 1)*width])
-						nn[count] = sub2indAll[cid][ii - 1 + (jj + 1)*width], count++;
-					if (validPixelsAll[cid][ii + 1 + (jj + 1)*width])
-						nn[count] = sub2indAll[cid][ii + 1 + (jj + 1)*width], count++;
-
-					NN.push_back(nn);
-					nNN.push_back(count);
-				}
-			}
-		}
-		nNNAll.push_back(nNN), NNAll.push_back(NN);
-
-	}
 
 	for (int ii = 0; ii < (int)allImgs.size(); ii++)
 	{
@@ -1967,14 +1922,12 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 		GetiK(allCalibInfo[ii].activeinvK, allCalibInfo[ii].activeK);
 	}
 
-	//dump to Ceres
 	ceres::Problem problem;
 
 	//Data term
 	for (int cidJ = 0; cidJ < 1; cidJ++) //for all refImages
 	{
-		bool once = true;
-		int hb = (int)min(2.0, 2.0* allImgs[0].scaleFactor[pyrID]);
+		int hb = 0;// (int)min(2.0, 2.0* allImgs[cidJ].scaleFactor[pyrID]);
 		for (int cidI = 0; cidI < (int)allImgs.size(); cidI++)
 		{
 			if (cidI == cidJ)
@@ -1984,7 +1937,7 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 			{
 				for (int ii = boundary; ii < width - boundary; ii++)
 				{
-					if (!validPixelsAll[cidJ][ii + jj*width])
+					if (!allImgs[cidJ].validPixelsPyr[pyrID][ii + jj*width])
 						continue;
 
 					float gradMag = allImgs[cidJ].gradPyr[pyrID][ii + jj*width];
@@ -1994,6 +1947,7 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 					ceres::LossFunction *ColorLoss = new ceres::HuberLoss(alignmentParas.HuberSizeColor);
 					ceres::LossFunction *ScaleColorLoss = new ceres::ScaledLoss(ColorLoss, dataWeight*gradMag, ceres::TAKE_OWNERSHIP);
 
+					double v = allImgs[cidJ].InvDepthPyr[pyrID][ii + jj*width];
 					if (SmallAngle == 1)
 					{
 						ceres::DynamicAutoDiffCostFunction<DepthImgWarpingSmall, 4> *cost_function = new ceres::DynamicAutoDiffCostFunction < DepthImgWarpingSmall, 4 >
@@ -2002,76 +1956,114 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 						cost_function->SetNumResiduals(nchannels);
 
 						vector<double*> parameter_blocks;
-						parameter_blocks.push_back(&allImgs[cidJ].depthPyr[pyrID][ii + jj*width]), cost_function->AddParameterBlock(1);
+						parameter_blocks.push_back(&allImgs[cidJ].InvDepthPyr[pyrID][ii + jj*width]), cost_function->AddParameterBlock(1);
 						parameter_blocks.push_back(allCalibInfo[cidJ].rt), cost_function->AddParameterBlock(6);
 						parameter_blocks.push_back(allCalibInfo[cidI].rt), cost_function->AddParameterBlock(6);
-						parameter_blocks.push_back(&allCalibInfo[cidI].photometric[2 * cidJ]), cost_function->AddParameterBlock(2);
+						//parameter_blocks.push_back(&allCalibInfo[cidI].photometric[2 * cidJ]), cost_function->AddParameterBlock(2);
 						problem.AddResidualBlock(cost_function, ScaleColorLoss, parameter_blocks);
-
-						if (fixDepth == 1)
-							problem.SetParameterBlockConstant(parameter_blocks[0]); //depth
-						if (cidJ == 0)
-							problem.SetParameterBlockConstant(parameter_blocks[1]); //pose Ref
-						if (fixPose == 1)
-							problem.SetParameterBlockConstant(parameter_blocks[2]); //pose nonRef
-						problem.SetParameterBlockConstant(parameter_blocks[3]); //photometric
 					}
 					else
 					{
 						//ceres::DynamicNumericDiffCostFunction<DepthImgWarping_SSD, ceres::CENTRAL> *cost_function = new ceres::DynamicNumericDiffCostFunction<DepthImgWarping_SSD, ceres::CENTRAL>
 						//	(new DepthImgWarping_SSD(Point2i(i, j), xycnRef, allImgs[cidJ].imgPyr[pyrID].data, allImgs[cidI].imgPyr[pyrID].data, allCalibInfo[cidI].intrinsic, Point2i(allImgs[cidI].width, allImgs[cidI].height), allImgs[cidI].nchannels, 1.0 / colorSigma, ii, cidI));
 						ceres::DynamicAutoDiffCostFunction<DepthImgWarping_SSD, 4> *cost_function = new ceres::DynamicAutoDiffCostFunction < DepthImgWarping_SSD, 4 >
-							(new DepthImgWarping_SSD(Point2i(i, j), xycnRef, allImgs[cidJ].imgPyr[pyrID].data, allImgs[cidI].imgPyr[pyrID].data, allCalibInfo[cidI].activeIntrinsic, Point2i(width, height), allImgs[cidI].nchannels, 1.0 / colorSigma, hb, cidI));
+							(new DepthImgWarping_SSD(Point2i(ii, jj), xycnRef, allImgs[cidJ].imgPyr[pyrID].data, allImgs[cidI].imgPyr[pyrID].data, allCalibInfo[cidI].activeIntrinsic, Point2i(width, height), allImgs[cidI].nchannels, 1.0 / colorSigma, hb, cidI));
 
 						cost_function->SetNumResiduals(nchannels);
 
 						vector<double*> parameter_blocks;
-						parameter_blocks.push_back(&allImgs[cidJ].depthPyr[pyrID][ii + jj*width]), cost_function->AddParameterBlock(1);
+						parameter_blocks.push_back(&allImgs[cidJ].InvDepthPyr[pyrID][ii + jj*width]), cost_function->AddParameterBlock(1);
 						parameter_blocks.push_back(allCalibInfo[cidJ].rt), cost_function->AddParameterBlock(6);
 						parameter_blocks.push_back(allCalibInfo[cidI].rt), cost_function->AddParameterBlock(6);
-						parameter_blocks.push_back(&allCalibInfo[cidI].photometric[2 * cidJ]), cost_function->AddParameterBlock(2);
+						//parameter_blocks.push_back(&allCalibInfo[cidI].photometric[2 * cidJ]), cost_function->AddParameterBlock(2);
 						problem.AddResidualBlock(cost_function, ScaleColorLoss, parameter_blocks);
-
-						if (fixDepth == 1)
-							problem.SetParameterBlockConstant(parameter_blocks[0]); //depth
-						if (cidJ == 0)
-							problem.SetParameterBlockConstant(parameter_blocks[1]); //pose Ref
-						if (fixPose == 1)
-							problem.SetParameterBlockConstant(parameter_blocks[2]); //pose nonRef
-						problem.SetParameterBlockConstant(parameter_blocks[3]); //photometric
-						problem.SetParameterLowerBound(parameter_blocks[0], 0, 1e-9); //positive depth
-
 					}
+
+					if (fixDepth == 1)
+						problem.SetParameterBlockConstant(&allImgs[cidJ].InvDepthPyr[pyrID][ii + jj*width]); //depth
+					if (cidJ == 0)
+						problem.SetParameterBlockConstant(allCalibInfo[cidJ].rt); //pose Ref
+					if (fixPose == 1)
+						problem.SetParameterBlockConstant(allCalibInfo[cidI].rt); //pose nonRef
+					//problem.SetParameterBlockConstant(&allCalibInfo[cidI].photometric[2 * cidJ]); //photometric
+
+					problem.SetParameterLowerBound(&allImgs[cidJ].InvDepthPyr[pyrID][ii + jj*width], 0, 1e-16); //positive depth
+					problem.SetParameterUpperBound(&allImgs[cidJ].InvDepthPyr[pyrID][ii + jj*width], 0, 3); //positive depth
 				}
 			}
 		}
 	}
 
+	//Intra depth regularization term
 	if (fixDepth == 0)
 	{
-		//Intra depth regularization term
 		for (int cid = 0; cid < 1; cid++)
 		{
 			double idepthSigma = 1.0 / depthSigma;
-			for (int ii = 0; ii < (int)NNAll[cid].size(); ii++)
+			int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, boundary = width / 50;
+			for (int jj = boundary; jj < height - boundary; jj++)
 			{
-				for (int jj = 1; jj < (int)nNNAll[cid][ii]; jj++)
+				for (int ii = boundary; ii < width - boundary; ii++)
 				{
+					if (!allImgs[cid].validPixelsPyr[pyrID][ii + jj*width])
+						continue;
 
-					int refi = NNAll[cid][ii][0], refj = NNAll[cid][ii][jj];
-					int iref = indIAll[cid][refi], jref = indJAll[cid][refi],
-						i = indIAll[cid][refj], j = indJAll[cid][refj], width = allImgs[cid].imgPyr[pyrID].cols;
-					double colorDif = 0;
-					for (int kk = 0; kk < nchannels; kk++)
-						colorDif += (double)((int)allImgs[cid].imgPyr[pyrID].data[kk + (iref + jref* width)*nchannels] - (int)allImgs[cid].imgPyr[pyrID].data[kk + (i + j* width)*nchannels]);
-					colorDif /= nchannels;
-					double edgePreservingWeight = std::exp(-abs(colorDif) / alignmentParas.colorSigma);
+					if (allImgs[cid].validPixelsPyr[pyrID][ii - 1 + jj*width])
+					{
+						double colorDif = 0;
+						for (int kk = 0; kk < nchannels; kk++)
+							colorDif += (double)((int)allImgs[cid].imgPyr[pyrID].data[kk + (ii + jj* width)*nchannels] - (int)allImgs[cid].imgPyr[pyrID].data[kk + (ii - 1 + jj* width)*nchannels]);
+						colorDif /= nchannels;
+						double edgePreservingWeight = std::exp(-abs(colorDif) / alignmentParas.colorSigma);
 
-					ceres::LossFunction *RegIntraLoss = new ceres::HuberLoss(3);
-					ceres::LossFunction *ScaleRegIntraLoss = new ceres::ScaledLoss(RegIntraLoss, regIntraWeight*edgePreservingWeight, ceres::TAKE_OWNERSHIP);
+						ceres::LossFunction *RegIntraLoss = new ceres::HuberLoss(30);
+						ceres::LossFunction *ScaleRegIntraLoss = new ceres::ScaledLoss(RegIntraLoss, regIntraWeight*edgePreservingWeight, ceres::TAKE_OWNERSHIP);
 
-					ceres::CostFunction* cost_function = IntraDepthRegularize::Create(idepthSigma);
-					problem.AddResidualBlock(cost_function, ScaleRegIntraLoss, &invDAll[cid][refi], &invDAll[cid][refj]);
+						ceres::CostFunction* cost_function = IntraDepthRegularize::Create(idepthSigma);
+						problem.AddResidualBlock(cost_function, ScaleRegIntraLoss, &allImgs[cid].InvDepthPyr[pyrID][ii + jj*width], &allImgs[cid].InvDepthPyr[pyrID][ii - 1 + jj*width]);
+					}
+					if (allImgs[cid].validPixelsPyr[pyrID][ii + 1 + jj*width])
+					{
+						double colorDif = 0;
+						for (int kk = 0; kk < nchannels; kk++)
+							colorDif += (double)((int)allImgs[cid].imgPyr[pyrID].data[kk + (ii + jj* width)*nchannels] - (int)allImgs[cid].imgPyr[pyrID].data[kk + (ii + -1 + jj* width)*nchannels]);
+						colorDif /= nchannels;
+						double edgePreservingWeight = std::exp(-abs(colorDif) / alignmentParas.colorSigma);
+
+						ceres::LossFunction *RegIntraLoss = new ceres::HuberLoss(30);
+						ceres::LossFunction *ScaleRegIntraLoss = new ceres::ScaledLoss(RegIntraLoss, regIntraWeight*edgePreservingWeight, ceres::TAKE_OWNERSHIP);
+
+						ceres::CostFunction* cost_function = IntraDepthRegularize::Create(idepthSigma);
+						problem.AddResidualBlock(cost_function, ScaleRegIntraLoss, &allImgs[cid].InvDepthPyr[pyrID][ii + jj*width], &allImgs[cid].InvDepthPyr[pyrID][ii + 1 + jj*width]);
+					}
+					if (allImgs[cid].validPixelsPyr[pyrID][ii + (jj - 1)*width])
+					{
+						double colorDif = 0;
+						for (int kk = 0; kk < nchannels; kk++)
+							colorDif += (double)((int)allImgs[cid].imgPyr[pyrID].data[kk + (ii + jj* width)*nchannels] - (int)allImgs[cid].imgPyr[pyrID].data[kk + (ii + (jj - 1)* width)*nchannels]);
+						colorDif /= nchannels;
+						double edgePreservingWeight = std::exp(-abs(colorDif) / alignmentParas.colorSigma);
+
+						ceres::LossFunction *RegIntraLoss = new ceres::HuberLoss(30);
+						ceres::LossFunction *ScaleRegIntraLoss = new ceres::ScaledLoss(RegIntraLoss, regIntraWeight*edgePreservingWeight, ceres::TAKE_OWNERSHIP);
+
+						ceres::CostFunction* cost_function = IntraDepthRegularize::Create(idepthSigma);
+						problem.AddResidualBlock(cost_function, ScaleRegIntraLoss, &allImgs[cid].InvDepthPyr[pyrID][ii + jj*width], &allImgs[cid].InvDepthPyr[pyrID][ii + (jj - 1)*width]);
+					}
+					if (allImgs[cid].validPixelsPyr[pyrID][ii + (jj + 1)*width])
+					{
+						double colorDif = 0;
+						for (int kk = 0; kk < nchannels; kk++)
+							colorDif += (double)((int)allImgs[cid].imgPyr[pyrID].data[kk + (ii + jj* width)*nchannels] - (int)allImgs[cid].imgPyr[pyrID].data[kk + (ii + (jj + 1)* width)*nchannels]);
+						colorDif /= nchannels;
+						double edgePreservingWeight = std::exp(-abs(colorDif) / alignmentParas.colorSigma);
+
+						ceres::LossFunction *RegIntraLoss = new ceres::HuberLoss(30);
+						ceres::LossFunction *ScaleRegIntraLoss = new ceres::ScaledLoss(RegIntraLoss, regIntraWeight*edgePreservingWeight, ceres::TAKE_OWNERSHIP);
+
+						ceres::CostFunction* cost_function = IntraDepthRegularize::Create(idepthSigma);
+						problem.AddResidualBlock(cost_function, ScaleRegIntraLoss, &allImgs[cid].InvDepthPyr[pyrID][ii + jj*width], &allImgs[cid].InvDepthPyr[pyrID][ii + (jj + 1)*width]);
+					}
 				}
 			}
 		}
@@ -2127,10 +2119,9 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 		char Fname[512];
 		sprintf(Fname, "%s/Level_%d", Path, pyrID); makeDir(Fname);
 
-		//for (int cidJ = 0; cidJ < (int)allImgs.size(); cidJ++)
+		for (int cidJ = 0; cidJ < 1; cidJ++)
 		{
-			int cidJ = 0;
-			int widthJ = allImgs[cidJ].imgPyr[pyrID].cols, heightJ = allImgs[cidJ].imgPyr[pyrID].rows, lengthJ = widthJ*heightJ, npts = 0;
+			int widthJ = allImgs[cidJ].imgPyr[pyrID].cols, heightJ = allImgs[cidJ].imgPyr[pyrID].rows, lengthJ = widthJ*heightJ, npts = 0, boundaryJ = widthJ / 50;
 			double residuals = 0.0;
 
 			uchar *resImg = new uchar[widthJ*heightJ* nchannels];
@@ -2143,85 +2134,87 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 				for (int ii = 0; ii < widthJ*heightJ* nchannels; ii++)
 					resImg[ii] = (uchar)128, synthImg[ii] = (uchar)128;
 
-				//int myX = 0, myY = 0;
 				int widthI = allImgs[cidI].imgPyr[pyrID].cols, heightI = allImgs[cidI].imgPyr[pyrID].rows;
-				for (int ii = 0; ii < (int)invDAll[cidJ].size(); ii++)
+				for (int jj = boundaryJ; jj < heightJ - boundaryJ; jj++)
 				{
-					//back-project ref depth to 3D
-					int i = indIAll[cidJ][ii], j = indJAll[cidJ][ii];
-					//if (i == myX && j == myY)
-					//	int a = 0;
-					double XYZ[3], rayDirRef[3], ij[3] = { i, j, 1 };
-					double d = invDAll[cidJ][ii];
-
-					getRfromr(allCalibInfo[cidJ].rt, allCalibInfo[cidJ].R);
-					getRayDir(rayDirRef, allCalibInfo[cidJ].activeinvK, allCalibInfo[cidJ].R, ij);
-					GetCfromT(allCalibInfo[cidJ].R, allCalibInfo[cidJ].rt + 3, allCalibInfo[cidJ].C);
-					for (int jj = 0; jj < 3; jj++)
-						XYZ[jj] = rayDirRef[jj] / d + allCalibInfo[cidJ].C[jj];
-
-					//project to other views
-					double tp[3], xcn, ycn, tu, tv, color[3];
-					if (SmallAngle == 1)
+					for (int ii = boundaryJ; ii < widthJ - boundaryJ; ii++)
 					{
-						//T R_nr[9] = { (T)1, -Parameters[2][2], Parameters[2][1],
-						//	Parameters[2][2], (T)1, -Parameters[2][0],
-						//	-Parameters[2][1], Parameters[2][0], (T)1 };
-						tp[0] = XYZ[0] - allCalibInfo[cidI].rt[2] * XYZ[1] + allCalibInfo[cidI].rt[1] * XYZ[2];
-						tp[1] = allCalibInfo[cidI].rt[2] * XYZ[0] + XYZ[1] - allCalibInfo[cidI].rt[0] * XYZ[2];
-						tp[2] = -allCalibInfo[cidI].rt[1] * XYZ[0] + allCalibInfo[cidI].rt[0] * XYZ[1] + XYZ[2];
-					}
-					else
-						ceres::AngleAxisRotatePoint(allCalibInfo[cidI].rt, XYZ, tp);
-					tp[0] += allCalibInfo[cidI].rt[3], tp[1] += allCalibInfo[cidI].rt[4], tp[2] += allCalibInfo[cidI].rt[5];
-					xcn = tp[0] / tp[2], ycn = tp[1] / tp[2];
+						if (!allImgs[cidJ].validPixelsPyr[pyrID][ii + jj*widthJ])
+							continue;
 
-					tu = allCalibInfo[cidI].activeIntrinsic[0] * xcn + allCalibInfo[cidI].activeIntrinsic[2] * ycn + allCalibInfo[cidI].activeIntrinsic[3];
-					tv = allCalibInfo[cidI].activeIntrinsic[1] * ycn + allCalibInfo[cidI].activeIntrinsic[4];
+						//back-project ref depth to 3D
+						double XYZ[3], rayDirRef[3], ij[3] = { ii, jj, 1 };
+						double d = allImgs[cidJ].InvDepthPyr[pyrID][ii + jj*widthJ];
 
-					if (tu<1 || tu> widthI - 2 || tv<1 || tv>heightI - 2)
-						continue;
-
-					if (nchannels == 1)
-					{
-						Grid2D<uchar, 1>  img(allImgs[cidI].imgPyr[pyrID].data, 0, heightI, 0, widthI);
-						BiCubicInterpolator<Grid2D < uchar, 1 > > imgInterp(img);
-
-						imgInterp.Evaluate(tv, tu, color);//ceres takes row, column
-						double fcolor = allCalibInfo[cidI].photometric[2 * cidJ] * color[0] + allCalibInfo[cidI].photometric[2 * cidJ + 1];
-						double dif = fcolor - (double)(int)allImgs[cidJ].imgPyr[pyrID].data[i + j * widthJ];
-
-						resImg[indIAll[cidJ][ii] + indJAll[cidJ][ii] * widthJ] = (uchar)(int)(128.0 + 5.0*dif); //magnify 5x
-						synthImg[indIAll[cidJ][ii] + indJAll[cidJ][ii] * widthJ] = (uchar)(int)(fcolor + 0.5);
-
-						residuals += dif*dif;
-						npts++;
-					}
-					else
-					{
-						Grid2D<uchar, 3>  img(allImgs[cidI].imgPyr[pyrID].data, 0, heightI, 0, widthI);
-						BiCubicInterpolator<Grid2D < uchar, 3 > > imgInterp(img);
-
-						imgInterp.Evaluate(tv, tu, color);//ceres takes row, column
-
+						getRfromr(allCalibInfo[cidJ].rt, allCalibInfo[cidJ].R);
+						getRayDir(rayDirRef, allCalibInfo[cidJ].activeinvK, allCalibInfo[cidJ].R, ij);
+						GetCfromT(allCalibInfo[cidJ].R, allCalibInfo[cidJ].rt + 3, allCalibInfo[cidJ].C);
 						for (int kk = 0; kk < 3; kk++)
-						{
-							double fcolor = allCalibInfo[cidI].photometric[2 * cidJ] * color[kk] + allCalibInfo[cidI].photometric[2 * cidJ + 1];
-							uchar refColor = allImgs[cidJ].imgPyr[pyrID].data[kk + (i + j* widthJ)*nchannels];
-							double dif = fcolor - (double)(int)refColor;
+							XYZ[kk] = rayDirRef[kk] / d + allCalibInfo[cidJ].C[kk];
 
-							resImg[indIAll[cidJ][ii] + indJAll[cidJ][ii] * widthJ + kk*lengthJ] = (uchar)(int)(128.0 + 5.0*dif); //magnify 5x
-							synthImg[indIAll[cidJ][ii] + indJAll[cidJ][ii] * widthJ + kk*lengthJ] = (uchar)(int)(fcolor + 0.5);
-							residuals += dif*dif;
+						//project to other views
+						double tp[3], xcn, ycn, tu, tv, color[3];
+						if (SmallAngle == 1)
+						{
+							//T R_nr[9] = { (T)1, -Parameters[2][2], Parameters[2][1],
+							//	Parameters[2][2], (T)1, -Parameters[2][0],
+							//	-Parameters[2][1], Parameters[2][0], (T)1 };
+							tp[0] = XYZ[0] - allCalibInfo[cidI].rt[2] * XYZ[1] + allCalibInfo[cidI].rt[1] * XYZ[2];
+							tp[1] = allCalibInfo[cidI].rt[2] * XYZ[0] + XYZ[1] - allCalibInfo[cidI].rt[0] * XYZ[2];
+							tp[2] = -allCalibInfo[cidI].rt[1] * XYZ[0] + allCalibInfo[cidI].rt[0] * XYZ[1] + XYZ[2];
 						}
-						npts += 3;
+						else
+							ceres::AngleAxisRotatePoint(allCalibInfo[cidI].rt, XYZ, tp);
+						tp[0] += allCalibInfo[cidI].rt[3], tp[1] += allCalibInfo[cidI].rt[4], tp[2] += allCalibInfo[cidI].rt[5];
+						xcn = tp[0] / tp[2], ycn = tp[1] / tp[2];
+
+						tu = allCalibInfo[cidI].activeIntrinsic[0] * xcn + allCalibInfo[cidI].activeIntrinsic[2] * ycn + allCalibInfo[cidI].activeIntrinsic[3];
+						tv = allCalibInfo[cidI].activeIntrinsic[1] * ycn + allCalibInfo[cidI].activeIntrinsic[4];
+
+						if (tu<1 || tu> widthI - 2 || tv<1 || tv>heightI - 2)
+							continue;
+
+						if (nchannels == 1)
+						{
+							Grid2D<uchar, 1>  img(allImgs[cidI].imgPyr[pyrID].data, 0, heightI, 0, widthI);
+							BiCubicInterpolator<Grid2D < uchar, 1 > > imgInterp(img);
+
+							imgInterp.Evaluate(tv, tu, color);//ceres takes row, column
+							double fcolor = allCalibInfo[cidI].photometric[2 * cidJ] * color[0] + allCalibInfo[cidI].photometric[2 * cidJ + 1];
+							double dif = fcolor - (double)(int)allImgs[cidJ].imgPyr[pyrID].data[ii + jj * widthJ];
+
+							resImg[ii + jj * widthJ] = (uchar)(int)(max(min(128.0 + 5.0*dif, 255.0), 0.0)); //magnify 5x
+							resImg[ii + jj * widthJ] = (uchar)(int)(fcolor + 0.5);
+
+							residuals += dif*dif;
+							npts++;
+						}
+						else
+						{
+							Grid2D<uchar, 3>  img(allImgs[cidI].imgPyr[pyrID].data, 0, heightI, 0, widthI);
+							BiCubicInterpolator<Grid2D < uchar, 3 > > imgInterp(img);
+
+							imgInterp.Evaluate(tv, tu, color);//ceres takes row, column
+
+							for (int kk = 0; kk < 3; kk++)
+							{
+								double fcolor = allCalibInfo[cidI].photometric[2 * cidJ] * color[kk] + allCalibInfo[cidI].photometric[2 * cidJ + 1];
+								uchar refColor = allImgs[cidJ].imgPyr[pyrID].data[kk + (ii + jj* widthJ)*nchannels];
+								double dif = fcolor - (double)(int)refColor;
+
+								resImg[ii + jj * widthJ + kk*lengthJ] = (uchar)(int)(max(min(128.0 + 5.0*dif, 255.0), 0.0)); //magnify 5x
+								synthImg[ii + jj * widthJ + kk*lengthJ] = (uchar)(int)(fcolor + 0.5);
+								residuals += dif*dif;
+							}
+							npts += 3;
+						}
 					}
 				}
 				sprintf(Fname, "%s/Level_%d/R_%03d_%03d_%03d.png", Path, pyrID, cidJ, cidI, iter), WriteGridToImage(Fname, resImg, widthJ, heightJ, nchannels);
 				sprintf(Fname, "%s/Level_%d/S_%03d_%03d_%03d.png", Path, pyrID, cidJ, cidI, iter), WriteGridToImage(Fname, synthImg, widthJ, heightJ, nchannels);
 
 				sprintf(Fname, "%s/pose_%d.txt", Path, cidJ); FILE *fp = fopen(Fname, "a+");
-				fprintf(fp, "Iter %d PyrID: %d Cid: %d %.16f %.16f %.16f %.16f %.16f %.16f %.4f %.4f \n", iter, pyrID, cidI, allCalibInfo[cidI].rt[0], allCalibInfo[cidI].rt[1], allCalibInfo[cidI].rt[2], allCalibInfo[cidI].rt[3], allCalibInfo[cidI].rt[4], allCalibInfo[cidI].rt[5], allCalibInfo[cidI].photometric[2 * cidJ], allCalibInfo[cidI].photometric[2 * cidJ + 1]);
+				fprintf(fp, "Iter %d PyrID: %d Cid: %d %.16e %.16e %.16e %.16e %.16e %.16e %.4f %.4f \n", iter, pyrID, cidI, allCalibInfo[cidI].rt[0], allCalibInfo[cidI].rt[1], allCalibInfo[cidI].rt[2], allCalibInfo[cidI].rt[3], allCalibInfo[cidI].rt[4], allCalibInfo[cidI].rt[5], allCalibInfo[cidI].photometric[2 * cidJ], allCalibInfo[cidI].photometric[2 * cidJ + 1]);
 				fclose(fp);
 			}
 			sprintf(Fname, "%s/iter_%d_%d.txt", Path, cidJ, pyrID);  FILE *fp = fopen(Fname, "a"); fprintf(fp, "%d %.16e\n", iter, sqrt(residuals / npts)); fclose(fp);
@@ -2231,16 +2224,15 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 	};
 	if (verbose == 1)
 	{
-		//for (int cid = 0; cid < (int)allImgs.size() - 1; cid++)
+		for (int cid = 0; cid < 1; cid++)
 		{
-			int cid = 0;
 			sprintf(Fname, "%s/iter_%d_%d.txt", Path, cid, pyrID);
 			FILE *fp = fopen(Fname, "w+"); fclose(fp);
 		}
 	}
 
-	MyCallBack *myCallback = new MyCallBack(update_Result, iter, verbose);
-	myCallback->callback_();
+	//MyCallBack *myCallback = new MyCallBack(update_Result, iter, verbose);
+	//myCallback->callback_();
 
 	ceres::Solver::Options options;
 	options.update_state_every_iteration = true;
@@ -2254,103 +2246,176 @@ double DirectAlignmentPyr(char *Path, DirectAlignPara &alignmentParas, vector<Im
 	options.use_inner_iterations = true;
 	options.use_nonmonotonic_steps = false;
 	options.max_num_iterations = pyrID > 1 ? 50 : 200;
-	options.parameter_tolerance = 1.0e-9;
+	options.parameter_tolerance = 1.0e-12;
 	options.minimizer_progress_to_stdout = verbose == 1 ? true : false;
 
 	ceres::Solver::Summary summary;
-	//ceres::Solve(options, &problem, &summary);
+	ceres::Solve(options, &problem, &summary);
 
 	//if (verbose == 1)
 	std::cout << "\n" << summary.BriefReport() << "\n";
 
-	printf("Saving data...");
-	for (int cid = 0; cid < (int)allImgs.size(); cid++)
+
+
+	/*double maxInvD = 0, minInvD = 9e9;
+	for (int cid = 0; cid < 1; cid++)
 	{
-		int width = allImgs[cid].imgPyr[pyrID].cols;
-		for (int ii = 0; ii < (int)invDAll[cid].size(); ii++)
-			allImgs[cid].depthPyr[pyrID][indIAll[cid][ii] + indJAll[cid][ii] * width] = 1.0 / invDAll[cid][ii];
+	int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, lengthJ = width*height, boundary = width / 50;
+	vector<Point3d> aXYZ; aXYZ.reserve(width*height);
+	for (int jj = boundary; jj < height - boundary; jj++)
+	{
+	for (int ii = boundary; ii < width - boundary; ii++)
+	{
+	if (allImgs[cid].validPixelsPyr[pyrID][ii + jj*width])
+	{
+	double XYZ[3], rayDir[3], ij[3] = { ii, jj, 1 };
+	getRayDir(rayDir, allCalibInfo[cid].activeinvK, allCalibInfo[cid].R, ij);
+	double invd = allImgs[cid].InvDepthPyr[pyrID][ii + jj * width];
+
+	for (int kk = 0; kk < 3; kk++)
+	XYZ[kk] = rayDir[kk] / invd + allCalibInfo[cid].C[kk];
+	aXYZ.push_back(Point3d(XYZ[0], XYZ[1], XYZ[2]));
+	}
+	}
 	}
 
+	double meanX = 0, meanY = 0, meanZ = 0;
+	for (auto XYZi : aXYZ)
+	meanX += XYZi.x, meanY += XYZi.y, meanZ += XYZi.z;
+	meanX /= (int)aXYZ.size(), meanY /= (int)aXYZ.size(), meanZ /= (int)aXYZ.size();
+
+	double stdX = 0, stdY = 0, stdZ = 0;
+	for (auto XYZi : aXYZ)
+	stdX += pow(XYZi.x - meanX, 2), meanY += pow(XYZi.y - meanY, 2), meanZ += pow(XYZi.z - meanZ, 2);
+	stdX = sqrt(stdX / (int)aXYZ.size()), stdY = sqrt(stdY / (int)aXYZ.size()), stdZ = sqrt(stdZ / (int)aXYZ.size());
+	double scale = max(max(stdX, stdY), stdZ);
+
+	//simple scale the depth
+	for (int jj = boundary; jj < height - boundary; jj++)
+	for (int ii = boundary; ii < width - boundary; ii++)
+	if (allImgs[cid].validPixelsPyr[pyrID][ii + jj*width])
+	allImgs[cid].InvDepthPyr[pyrID][ii + jj * width] /= scale;
+
+	//have to move the camera before scale it down.
+	for (int cid = 0; cid < (int)allImgs.size(); cid++)
+	{
+	double R[9], T[3], C[3];
+	GetRTFromrt(allCalibInfo[cid].rt, R, T);
+	GetCfromT(R, T, C);
+	C[0] = (C[0] - meanX) / scale, C[1] = (C[1] - meanY) / scale, C[2] = (C[2] - meanZ) / scale;
+	GetTfromC(R, C, T);
+	GetrtFromRT(allCalibInfo[cid].rt, R, T);
+	}
+	break;
+	}*/
+
+
+	//let's normalized everything
+	double maxInvD = 0, minInvD = 9e9;
+	for (int cid = 0; cid < 1; cid++)
+	{
+		int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, lengthJ = width*height, boundary = width / 50;
+		for (int jj = boundary; jj < height - boundary; jj++)
+		{
+			for (int ii = boundary; ii < width - boundary; ii++)
+			{
+				if (allImgs[cid].validPixelsPyr[pyrID][ii + jj*width])
+				{
+					double invd = allImgs[cid].InvDepthPyr[pyrID][ii + jj * width];
+					maxInvD = max(invd, maxInvD);
+					minInvD = min(invd, minInvD);
+				}
+			}
+		}
+
+		for (int jj = boundary; jj < height - boundary; jj++)
+		{
+			for (int ii = boundary; ii < width - boundary; ii++)
+			{
+				if (allImgs[cid].validPixelsPyr[pyrID][ii + jj*width])
+				{
+					double XYZ[3], rayDir[3], ij[3] = { ii, jj, 1 };
+					allImgs[cid].InvDepthPyr[pyrID][ii + jj * width] /= maxInvD; //divide by maxInvD instead of min because the depth tends to be pushed to maxInvD range
+				}
+			}
+		}
+	}
+	for (int cid = 0; cid < (int)allImgs.size(); cid++)
+		for (int ii = 3; ii < 6; ii++)
+			allCalibInfo[cid].rt[ii] *= maxInvD;
+
+
+	printf("Saving data...");
 	if (WriteOutput == 1)
 	{
 		sprintf(Fname, "%s/pose.txt", Path); FILE *fp = fopen(Fname, "a+");
 		for (int cid = 0; cid < (int)allImgs.size(); cid++)
-			fprintf(fp, "Cid: %d  PyrID: %d %.16f %.16f %.16f %.16f %.16f %.16f %\n", allImgs[cid].frameID, pyrID,
+			fprintf(fp, "Cid: %d  PyrID: %d %.16e %.16e %.16e %.16e %.16e %.16e %\n", allImgs[cid].frameID, pyrID,
 			allCalibInfo[cid].rt[0], allCalibInfo[cid].rt[1], allCalibInfo[cid].rt[2], allCalibInfo[cid].rt[3], allCalibInfo[cid].rt[4], allCalibInfo[cid].rt[5]);
 		fclose(fp);
 
-		//for (int cid = 0; cid < (int)allImgs.size(); cid++)
+		for (int cid = 0; cid < 1; cid++)
 		{
-			int cid = 0;
-			int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, lengthJ = width*height;
-			float *depthMap = new float[width*height];
-
-			for (int ii = 0; ii < width*height; ii++)
-				depthMap[ii] = 0.0f;
-			for (int ii = 0; ii < (int)invDAll[cid].size(); ii++)
-			{
-				int i = indIAll[cid][ii], j = indJAll[cid][ii];
-				depthMap[i + j*width] = 1.0 / invDAll[cid][ii];
-			}
-			sprintf(Fname, "%s/D_%d_%d.dat", Path, cid, pyrID), WriteGridBinary(Fname, allImgs[cid].depthPyr[pyrID], width, height, 1);
+			int width = allImgs[cid].imgPyr[pyrID].cols, height = allImgs[cid].imgPyr[pyrID].rows, lengthJ = width*height, boundary = width / 50;
+			sprintf(Fname, "%s/invD_%d_%d.dat", Path, cid, pyrID), WriteGridBinary(Fname, allImgs[cid].InvDepthPyr[pyrID], width, height, 1);
 
 			double rayDir[3], opticalAxis[3], ij[3] = { allCalibInfo[cid].activeK[2], allCalibInfo[cid].activeK[5], 1 };
 			getRayDir(opticalAxis, allCalibInfo[cid].activeinvK, allCalibInfo[cid].R, ij);
 			double normOptical = sqrt(pow(opticalAxis[0], 2) + pow(opticalAxis[1], 2) + pow(opticalAxis[2], 2));
 
-			for (int ii = 0; ii < width*height; ii++)
-				depthMap[ii] = 0.f;
-			for (int ii = 0; ii < (int)invDAll[cid].size(); ii++)
+			/*double *depthMap = new double[width*height];
+			for (int jj = boundary; jj < height - boundary; jj++)
 			{
-				int i = indIAll[cid][ii], j = indJAll[cid][ii];
-				double ij[3] = { i, j, 1 };
-				getRayDir(rayDir, allCalibInfo[cid].activeinvK, allCalibInfo[cid].R, ij);
-				double cos = (rayDir[0] * opticalAxis[0] + rayDir[1] * opticalAxis[1] + rayDir[2] * opticalAxis[2]) /
-					sqrt(pow(rayDir[0], 2) + pow(rayDir[1], 2) + pow(rayDir[2], 2)) / normOptical;
+			for (int ii = boundary; ii < width - boundary; ii++)
+			{
+			if (!allImgs[cid].validPixelsPyr[pyrID][ii + jj*width])
+			depthMap[ii + jj*width] = 0;
+			else
+			{
+			double ij[3] = { ii, jj, 1 };
+			getRayDir(rayDir, allCalibInfo[cid].activeinvK, allCalibInfo[cid].R, ij);
+			double cos = (rayDir[0] * opticalAxis[0] + rayDir[1] * opticalAxis[1] + rayDir[2] * opticalAxis[2]) /
+			sqrt(pow(rayDir[0], 2) + pow(rayDir[1], 2) + pow(rayDir[2], 2)) / normOptical;
 
-				double d = allImgs[cid].depthPyr[pyrID][i + j * width];
-				if (abs(d) < 1e-16)
-					depthMap[j + j * width] = 1e16;
-				else
-					depthMap[i + j* width] = 1.0 / (cos * d + 1.0e-16);
+			double invd = allImgs[cid].InvDepthPyr[pyrID][ii + jj * width];
+			if (abs(invd) > DBL_MAX)
+			depthMap[ii + jj * width] = DBL_MAX;
+			else
+			depthMap[ii + jj* width] = 1.0 / (cos / invd + DBL_MIN);
+			}
+			}
 			}
 			sprintf(Fname, "%s/invfrontoD_%d_%d.dat", Path, cid, pyrID), WriteGridBinary(Fname, depthMap, width, height);
-			delete[]depthMap;
+			delete[]depthMap;*/
 
 			if (nchannels == 1)
 				sprintf(Fname, "%s/3d_%d_%d.txt", Path, cid, pyrID);
 			else
 				sprintf(Fname, "%s/3d_%d_%d.txt", Path, cid, pyrID);
 			fp = fopen(Fname, "w+");
-			for (int ii = 0; ii < (int)invDAll[cid].size(); ii++)
+			for (int jj = boundary; jj < height - boundary; jj++)
 			{
-				int i = indIAll[cid][ii], j = indJAll[cid][ii];
-				double XYZ[3], rayDir[3], ij[3] = { i, j, 1 };
-				getRayDir(rayDir, allCalibInfo[cid].activeinvK, allCalibInfo[cid].R, ij);
-				double d = allImgs[cid].depthPyr[pyrID][i + j * width];
-				//if (highDepth > 0 && lowDepth > 0)
-				//	if (abs(d) < lowDepth || abs(d) > highDepth)
-				//		continue;
+				for (int ii = boundary; ii < width - boundary; ii++)
+				{
+					if (allImgs[cid].validPixelsPyr[pyrID][ii + jj*width])
+					{
+						double XYZ[3], rayDir[3], ij[3] = { ii, jj, 1 };
+						getRayDir(rayDir, allCalibInfo[cid].activeinvK, allCalibInfo[cid].R, ij);
+						double invd = allImgs[cid].InvDepthPyr[pyrID][ii + jj * width];
 
-				for (int kk = 0; kk < 3; kk++)
-					XYZ[kk] = rayDir[kk] * d + allCalibInfo[cid].C[kk];
-				if (nchannels == 1)
-					fprintf(fp, "%.8e %.8e %.8e\n", XYZ[0], XYZ[1], XYZ[2]);
-				else
-					fprintf(fp, "%.8e %.8e %.8e %d %d %d\n", XYZ[0], XYZ[1], XYZ[2],
-					(int)allImgs[cid].imgPyr[pyrID].data[(i + j*width)*nchannels + 2], (int)allImgs[cid].imgPyr[pyrID].data[(i + j*width)*nchannels + 1], (int)allImgs[cid].imgPyr[pyrID].data[(i + j*width)*nchannels]);
+						for (int kk = 0; kk < 3; kk++)
+							XYZ[kk] = rayDir[kk] / invd + allCalibInfo[cid].C[kk];
+						if (nchannels == 1)
+							fprintf(fp, "%.8e %.8e %.8e\n", XYZ[0], XYZ[1], XYZ[2]);
+						else
+							fprintf(fp, "%.8e %.8e %.8e %d %d %d\n", XYZ[0], XYZ[1], XYZ[2],
+							(int)allImgs[cid].imgPyr[pyrID].data[(ii + jj*width)*nchannels + 2], (int)allImgs[cid].imgPyr[pyrID].data[(ii + jj*width)*nchannels + 1], (int)allImgs[cid].imgPyr[pyrID].data[(ii + jj*width)*nchannels]);
+					}
+				}
 			}
 			fclose(fp);
 		}
 	}
-
-	for (int ii = 0; ii < (int)validPixelsAll.size(); ii++)
-		delete[] validPixelsAll[ii];
-	for (int ii = 0; ii < (int)sub2indAll.size(); ii++)
-		delete[] sub2indAll[ii];
-	delete[]indIAll, delete[]indJAll, delete[]invDAll, delete[]GradAll;
-	for (int ii = 0; ii < (int)Grad2All.size(); ii++)
-		delete[]Grad2All[ii];
 
 	return summary.final_cost;
 }
@@ -2372,8 +2437,6 @@ int DirectAlignment(char *Path, DirectAlignPara &alignmentParas, vector<ImgData>
 		if (cid > 0)
 			continue;
 
-		for (int ii = 0; ii < width*height; ii++)
-			allImgs[cid].Grad[ii] = 0.0;
 		for (int jj = boundary; jj < height - boundary; jj++)
 		{
 			for (int ii = boundary; ii < width - boundary; ii++)
@@ -2385,26 +2448,90 @@ int DirectAlignment(char *Path, DirectAlignPara &alignmentParas, vector<ImgData>
 			}
 		}
 
+		vector<Point2i> segQueue; segQueue.reserve(1e6);
+		vector<bool> processedQueue; processedQueue.reserve(1e6);
+		if (alignmentParas.removeSmallRegions)
+		{
+			bool *processedPixels = new bool[width*height];
+			for (int ii = 0; ii < width*height; ii++)
+				processedPixels[ii] = false;
+			for (int jj = boundary; jj < height - boundary; jj++)
+			{
+				for (int ii = boundary; ii < width - boundary; ii++)
+				{
+					float mag = allImgs[cid].Grad[ii + jj*width];
+					if (!processedPixels[ii + jj*width] && mag > alignmentParas.gradientThresh)
+					{
+						processedQueue.clear(), segQueue.clear();
+						processedQueue.push_back(false), segQueue.push_back(Point2i(ii, jj));
+						processedPixels[ii + jj*width] = true;
+						while (true)
+						{
+							int npts_before = (int)segQueue.size();
+							for (int kk = 0; kk < (int)segQueue.size(); kk++)
+							{
+								if (processedQueue[kk])
+									continue;
+								processedQueue[kk] = true;
+								for (int i = -1; i <= 1; i++)
+								{
+									for (int j = -1; j <= 1; j++)
+									{
+										int x = segQueue[kk].x + i, y = segQueue[kk].y + j;
+										if (x<boundary || x>width - boundary || y<boundary || y>height - boundary)
+											continue;
+										mag = allImgs[cid].Grad[x + y*width];
+										bool boolean = processedPixels[x + y*width];
+										if (!boolean && mag > alignmentParas.gradientThresh)
+											segQueue.push_back(Point2i(x, y)), processedQueue.push_back(false), processedPixels[x + y*width] = true;
+									}
+								}
+							}
+							if ((int)segQueue.size() - npts_before == 0)
+								break;
+						}
 
+						if (segQueue.size() > (int)(100.0))//10x10 @ 1920x1080
+						{
+							for (int kk = 0; kk < (int)segQueue.size(); kk++)
+							{
+								int x = segQueue[kk].x, y = segQueue[kk].y;
+								allImgs[cid].validPixels[x + y*width] = true;
+							}
+						}
+					}
+				}
+			}
+			delete[]processedPixels;
+		}
+		else
+			for (int jj = boundary; jj < height - boundary; jj++)
+				for (int ii = boundary; ii < width - boundary; ii++)
+					if (allImgs[cid].Grad[ii + jj*width] > alignmentParas.gradientThresh)
+						allImgs[cid].validPixels[ii + jj*width] = true;
+
+		BuildDataPyramid(allImgs[cid].validPixels, allImgs[cid].validPixelsPyr, allImgs[cid].width, allImgs[cid].height, nscales, true);
 		BuildDataPyramid(allImgs[cid].Grad, allImgs[cid].gradPyr, allImgs[cid].width, allImgs[cid].height, nscales);
-		BuildDataPyramid(allImgs[cid].depth, allImgs[cid].depthPyr, allImgs[cid].width, allImgs[cid].height, nscales);
+		BuildDataPyramid(allImgs[cid].InvDepth, allImgs[cid].InvDepthPyr, allImgs[cid].width, allImgs[cid].height, nscales);
 	}
 
-	/*int pyrID = 1;
-	//for (int cid = 0; cid < (int)allImgs.size(); cid++)
+	/*int pyrID = 3;
+	for (int cid = 0; cid < 1; cid++)
 	{
-	int cid = 0;
 	char Fname[512];  sprintf(Fname, "%s/D_%d_%d.dat", Path, cid, pyrID);
-	ReadGridBinary(Fname, allImgs[cid].depthPyr[pyrID], allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows);
-	for (int ii = 0; ii < allImgs[cid].imgPyr[pyrID].cols* allImgs[cid].imgPyr[pyrID].rows; ii++)
-	allImgs[cid].depthPyr[pyrID][ii] *= scale;
-	//UpsamleDepth(allImgs[cid].depthPyr[pyrID], allImgs[cid].depthPyr[pyrID - 1], allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows, allImgs[cid].imgPyr[pyrID - 1].cols, allImgs[cid].imgPyr[pyrID - 1].rows);
+	ReadGridBinary(Fname, allImgs[cid].InvDepthPyr[pyrID], allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows);
+
+	UpsamleDepthNN(allImgs[cid].InvDepthPyr[pyrID], allImgs[cid].InvDepthPyr[pyrID - 1], allImgs[cid].validPixelsPyr[pyrID], allImgs[cid].validPixelsPyr[pyrID - 1],
+	allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows, allImgs[cid].imgPyr[pyrID - 1].cols, allImgs[cid].imgPyr[pyrID - 1].rows);
+
+	sprintf(Fname, "%s/invD_%d_%d.dat", Path, cid, pyrID - 1);
+	WriteGridBinary(Fname, allImgs[cid].InvDepthPyr[pyrID - 1], allImgs[cid].imgPyr[pyrID - 1].cols, allImgs[cid].imgPyr[pyrID - 1].rows, 1);
 	}
-	char Fname[512];  sprintf(Fname, "%s/p1.txt", Path);
+	char Fname[512];  sprintf(Fname, "%s/p4.txt", Path);
 	FILE *fp = fopen(Fname, "r");
 	for (int cid = 0; cid < (int)allImgs.size(); cid++)
 	{
-	int dummy;fscanf(fp, "%d ", &dummy);
+	int dummy; fscanf(fp, "%d ", &dummy);
 	if (dummy != allCalibInfo[cid].frameID)
 	int a = 0;
 	for (int ii = 0; ii < 6; ii++)
@@ -2422,6 +2549,12 @@ int DirectAlignment(char *Path, DirectAlignPara &alignmentParas, vector<ImgData>
 			sprintf(Fname, "%s/Level_%d", Path, pyrID); makeDir(Fname);
 			sprintf(Fname, "%s/Level_%d/%03d.png", Path, pyrID, cid);
 			imwrite(Fname, allImgs[cid].imgPyr[pyrID]);
+
+			if (cid > 0)
+				continue;
+
+			sprintf(Fname, "%s/Level_%d/m_%03d.png", Path, pyrID, cid);
+			WriteGridToImage(Fname, allImgs[cid].validPixelsPyr[pyrID], allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows, 1);
 		}
 
 		/*double startTimeI = omp_get_wtime();
@@ -2448,497 +2581,143 @@ int DirectAlignment(char *Path, DirectAlignPara &alignmentParas, vector<ImgData>
 		DirectAlignmentPyr(Path, alignmentParas, allImgs, allCalibInfo, 0, 0, pyrID, smallAngle, 1, 1);
 
 		if (pyrID != 0)
-			for (int cid = 0; cid < (int)allImgs.size(); cid++)
-				UpsamleDepth(allImgs[cid].depthPyr[pyrID], allImgs[cid].depthPyr[pyrID - 1], allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows, allImgs[cid].imgPyr[pyrID - 1].cols, allImgs[cid].imgPyr[pyrID - 1].rows);
+			for (int cid = 0; cid < 1; cid++)
+			{
+				UpsamleDepthNN(allImgs[cid].InvDepthPyr[pyrID], allImgs[cid].InvDepthPyr[pyrID - 1], allImgs[cid].validPixelsPyr[pyrID], allImgs[cid].validPixelsPyr[pyrID - 1],
+					allImgs[cid].imgPyr[pyrID].cols, allImgs[cid].imgPyr[pyrID].rows, allImgs[cid].imgPyr[pyrID - 1].cols, allImgs[cid].imgPyr[pyrID - 1].rows);
+
+				//char Fname[512];  sprintf(Fname, "%s/invD_%d_%d.dat", Path, cid, pyrID - 1);
+				//WriteGridBinary(Fname, allImgs[cid].InvDepthPyr[pyrID - 1], allImgs[cid].imgPyr[pyrID - 1].cols, allImgs[cid].imgPyr[pyrID - 1].rows, 1);
+			}
 	}
 	printf("\n\nTotal time: %.2f\n", omp_get_wtime() - startTime);
 
-	for (int cid = 0; cid < (int)allImgs.size(); cid++)
-	{
-		if (cid > 0)
-			continue;
+	for (int cid = 0; cid < 1; cid++)
 		for (int pyrID = 0; pyrID < nscales + 1; pyrID++)
-			delete[]allImgs[cid].depthPyr[pyrID], delete[]allImgs[cid].gradPyr[pyrID];
-	}
+			delete[]allImgs[cid].InvDepthPyr[pyrID], delete[]allImgs[cid].gradPyr[pyrID], delete[]allImgs[cid].validPixelsPyr[pyrID];
+
 	return 1;
 }
-
 
 int main(int argc, char** argv)
 {
 	//srand(time(NULL));
 	srand(1);
-	char Fname[512], Path[] = "C:/Data/MSR/Micro/Stairs/0";
-	int mode = 5;
-	//4: init with spline from other key frames; 
-	//3:good init but add noise on Sudipta's format; 
-	//2: synth; 
-	//1: low based; 
-	//0: middlebury
+	char Fname[512], Path[] = "C:/Data/MSR/Micro/Stairs";
 
-	//ExtractVideoFrames("C:/Data/MSR/Drone", "DJI_0017.mov", 450, 510, 1, 0, 3, 0);
-	//return 0;
-	if (mode == 5)
+	int nchannels = 3, refF = 15, rangeF = 15, stepF = 1;
+	vector<ImgData> allImgs;
+	vector<CameraData> allCalibInfo;
+
+	double scale = 1.0, DepthLow = -1, DepthHigh = -1;
+	double dataWeight = 1.0, regIntraWeight = atof(argv[1]), regInterWeight = 1.0 - dataWeight - regIntraWeight;
+	double reprojectionSigma = 0.3, colorSigma = 3.0, depthSigma = 1.0;  //expected std of variables
+	double ImGradientThesh = 10;
+	DirectAlignPara alignmentParas(dataWeight, regIntraWeight, regInterWeight, colorSigma, depthSigma, ImGradientThesh, DepthLow, DepthHigh, reprojectionSigma);
+	alignmentParas.HuberSizeColor = 30, alignmentParas.removeSmallRegions = false;
+
+	printf("\n\n\nWorking on IntraReg: %.3e\n", regIntraWeight);
+	/*sprintf(Fname, "%s/SMC/paras.txt", Path);
+	FILE *fp = fopen(Fname, "r");
+	if (fp == NULL)
+	return 1;
+	else
 	{
-		int nchannels = 3, refF = 15, rangeF = 15, stepF = 14;
-		char Path[] = "C:/Data/MSR/Micro/Stairs";
-		vector<ImgData> allImgs;
-		vector<CameraData> allCalibInfo;
+	CameraData camI;
+	fscanf(fp, "%lf %lf %lf %lf %lf ", &camI.intrinsic[0], &camI.intrinsic[3], &camI.intrinsic[4], &camI.distortion[0], &camI.distortion[1]);
 
-		//double scale = 625.0 / 0.51, DepthLow = 900, DepthHigh = 1800;// MSR2
-		//double scale = 150.0 / 0.0060881017756917542, DepthLow = 2000, DepthHigh = 20000; //Stairs
-		//double scale = 150.0 / 0.11, DepthLow = 1000, DepthHigh = 10000; //Desk
-		double scale = 1.0, DepthLow = -1, DepthHigh = -1;//Drone
-		double dataWeight = 1.0, regIntraWeight = 10000000.0, regInterWeight = 1.0 - dataWeight - regIntraWeight;
-		double reprojectionSigma = 0.3, colorSigma = 3.0,   //expected std of variables
-			depthSigma = 1;//mm
-		double ImGradientThesh2 = 100;
-		DirectAlignPara alignmentParas(dataWeight, regIntraWeight, regInterWeight, colorSigma, depthSigma, ImGradientThesh2, DepthLow, DepthHigh, reprojectionSigma);
-		alignmentParas.HuberSizeColor = 30, alignmentParas.removeSmallRegions = false;;
+	camI.ShutterModel = 0;
+	camI.intrinsic[1] = camI.intrinsic[0], camI.intrinsic[2] = 0;
+	GetKFromIntrinsic(camI.K, camI.intrinsic);
+	GetiK(camI.invK, camI.K);
 
-		/*sprintf(Fname, "%s/SMC/paras.txt", Path);
-		FILE *fp = fopen(Fname, "r");
-		if (fp == NULL)
-		return 1;
-		else
-		{
+	while (fscanf(fp, "%d ", &camI.frameID) != EOF)
+	{
+	for (int ii = 0; ii < 6; ii++)
+	fscanf(fp, "%lf ", &camI.rt[ii]);
+	for (int ii = 0; ii < 3; ii++)
+	camI.rt[ii + 3] *= scale;
+	GetRTFromrt(camI.rt, camI.R, camI.T);
+	GetCfromT(camI.R, camI.T, camI.C);
+	AssembleP(camI.K, camI.R, camI.T, camI.P);
+	allCalibInfo.push_back(camI);
+	}
+	fclose(fp);
+	}*/
+	/*vector<int> frames; frames.push_back(0), frames.push_back(14), frames.push_back(15), frames.push_back(27), frames.push_back(28);
+	double SfMdistance = TriangulatePointsFromNonCorpusCameras(Path, allCalibInfo, frames, 1, 2, 2.0);
+	printf("SfM measured distance: %.6f\n ", SfMdistance);
+	return 0;*/
+
+	vector<int> allframes;
+	allframes.push_back(refF);
+	for (int ii = stepF; ii < rangeF; ii += stepF)
+		allframes.push_back(refF + ii), allframes.push_back(refF - ii);
+	for (int fid : allframes)
+	{
 		CameraData camI;
-		fscanf(fp, "%lf %lf %lf %lf %lf ", &camI.intrinsic[0], &camI.intrinsic[3], &camI.intrinsic[4], &camI.distortion[0], &camI.distortion[1]);
+		camI.frameID = fid;
+		//camI.intrinsic[0] = 0.7 * 3840, camI.intrinsic[3] = 3840 / 2, camI.intrinsic[4] = 2160 / 2, camI.distortion[0] = 0, camI.distortion[1] = 0;
+		camI.intrinsic[0] = 1233.617524, camI.intrinsic[3] = 640, camI.intrinsic[4] = 360, camI.distortion[0] = 0, camI.distortion[1] = 0;
 
 		camI.ShutterModel = 0;
 		camI.intrinsic[1] = camI.intrinsic[0], camI.intrinsic[2] = 0;
 		GetKFromIntrinsic(camI.K, camI.intrinsic);
 		GetiK(camI.invK, camI.K);
 
-		while (fscanf(fp, "%d ", &camI.frameID) != EOF)
-		{
 		for (int ii = 0; ii < 6; ii++)
-		fscanf(fp, "%lf ", &camI.rt[ii]);
-		for (int ii = 0; ii < 3; ii++)
-		camI.rt[ii + 3] *= scale;
+			camI.rt[ii] = 0.0;
 		GetRTFromrt(camI.rt, camI.R, camI.T);
 		GetCfromT(camI.R, camI.T, camI.C);
 		AssembleP(camI.K, camI.R, camI.T, camI.P);
 		allCalibInfo.push_back(camI);
-		}
-		fclose(fp);
-		}*/
-		/*vector<int> frames; frames.push_back(0), frames.push_back(14), frames.push_back(15), frames.push_back(27), frames.push_back(28);
-		double SfMdistance = TriangulatePointsFromNonCorpusCameras(Path, allCalibInfo, frames, 1, 2, 2.0);
-		printf("SfM measured distance: %.6f\n ", SfMdistance);
-		return 0;*/
-
-		vector<int> allframes;
-		allframes.push_back(refF);
-		for (int ii = stepF; ii < rangeF; ii += stepF)
-			//allframes.push_back(refF + ii), 
-			allframes.push_back(refF - ii);
-		for (int fid : allframes)
-		{
-			CameraData camI;
-			camI.frameID = fid;
-			//camI.intrinsic[0] = 0.7 * 3840, camI.intrinsic[3] = 3840 / 2, camI.intrinsic[4] = 2160 / 2, camI.distortion[0] = 0, camI.distortion[1] = 0;
-			camI.intrinsic[0] = 1233.617524, camI.intrinsic[3] = 640, camI.intrinsic[4] = 360, camI.distortion[0] = 0, camI.distortion[1] = 0;
-
-			camI.ShutterModel = 0;
-			camI.intrinsic[1] = camI.intrinsic[0], camI.intrinsic[2] = 0;
-			GetKFromIntrinsic(camI.K, camI.intrinsic);
-			GetiK(camI.invK, camI.K);
-
-			for (int ii = 0; ii < 6; ii++)
-				camI.rt[ii] = 0.0;
-			GetRTFromrt(camI.rt, camI.R, camI.T);
-			GetCfromT(camI.R, camI.T, camI.C);
-			AssembleP(camI.K, camI.R, camI.T, camI.P);
-			allCalibInfo.push_back(camI);
-		}
-		for (int ii = 0; ii < (int)allCalibInfo.size(); ii++)
-		{
-			ImgData imgI;
-			sprintf(Fname, "%s/0/%d.png", Path, allCalibInfo[ii].frameID);
-			imgI.color = imread(Fname, nchannels == 1 ? 0 : 1);
-			if (imgI.color.data == NULL)
-			{
-				printf("Cannot load %s\n", Fname);
-				continue;
-			}
-			imgI.width = imgI.color.cols, imgI.height = imgI.color.rows, imgI.frameID = allCalibInfo[ii].frameID, imgI.nchannels = nchannels;
-			allImgs.push_back(imgI);
-		}
-
-		//InitializeRT(allImgs, allCalibInfo);
-		/*sprintf(Fname, "%s/Corpus/n3dGL.xyz", Path);
-		Corpus CorpusData; ReadCorpusInfo(Fname, CorpusData, scale);
-		float depth[2];
-		ExtractDepthFromCorpus(CorpusData, allCalibInfo[0], 0, depth);*/
-
-		for (int ii = 0; ii < allCalibInfo.size(); ii++)
-			for (int jj = 0; jj < 3; jj++)
-				;// allCalibInfo[ii].rt[jj] = 0; //rotation is not precise, translation is pretty good via bspline of keyframes
-		for (int ii = 1; ii < allCalibInfo.size(); ii++)
-			for (int jj = 0; jj < 3; jj++)
-				;// allCalibInfo[ii].rt[jj + 3] += 0.0025*rand() / RAND_MAX; //approximately 5mm for Micro4 
-
-		for (int cid = 0; cid < (int)allImgs.size(); cid++)
-		{
-			allImgs[cid].depth = new float[allImgs[cid].width*allImgs[cid].height];
-			allImgs[cid].Grad = new float[allImgs[cid].width*allImgs[cid].height];
-		}
-
-		for (int cid = 0; cid < (int)allImgs.size(); cid++)
-			for (int jj = 0; jj < allImgs[cid].height; jj++)
-				for (int ii = 0; ii < allImgs[cid].width; ii++)
-					allImgs[cid].depth[ii + jj*allImgs[cid].width] = min(2.5, max(0.001, gaussian_noise(1.0, 0.5)));
-
-		DirectAlignment(Path, alignmentParas, allImgs, allCalibInfo, 0, scale);
-
-		return 0;
 	}
-	if (mode == 4) //no init
+	for (int ii = 0; ii < (int)allCalibInfo.size(); ii++)
 	{
-		int nchannels = 3;
-		char Path[] = "D:/Data/Micro/MSR2";
-		vector<ImgData> allImgs;
-		vector<CameraData> allCalibInfo;
-
-		//double scale = 2630;//for micro4
-		//double scale = 246;//for micro3
-		double scale = 1.0;
-		//double scale = 1.0; 
-		double dataWeight = 0.01, regIntraWeight = 10.0, regInterWeight = 1.0 - dataWeight - regIntraWeight;
-		double DepthLow = 1000, DepthHigh = 1800;
-		double reprojectionSigma = 0.3, colorSigma = 3.0,   //expected std of variables
-			depthSigma = 10;//mm
-		double ImGradientThesh2 = 1;
-		DirectAlignPara alignmentParas(dataWeight, regIntraWeight, regInterWeight, colorSigma, depthSigma, ImGradientThesh2, DepthLow, DepthHigh, reprojectionSigma);
-
-		int refF = 130;
-		vector<int> camIDs; camIDs.push_back(refF);
-		for (int ii = 1; ii < 20; ii++)
-			camIDs.push_back(refF + ii), camIDs.push_back(refF - ii);
-
-		VideoData vInfo;
-		ReadVideoDataI(Path, vInfo, 0, 0, 1800, scale);
-		for (int ii = 0; ii < (int)camIDs.size(); ii++)
-			allCalibInfo.push_back(vInfo.VideoInfo[camIDs[ii]]);
-
-		vector<int> frames; frames.push_back(refF - 19), frames.push_back(refF - 10), frames.push_back(refF), frames.push_back(refF + 10), frames.push_back(refF + 19);
-		double SfMdistance = TriangulatePointsFromNonCorpusCameras(Path, vInfo, frames, 1, 10, 2.0);
-		printf("SfM measured distance: %.3f\nPlease input the physcial distance (mm): ", SfMdistance);
-		return 0;
-
-		for (int ii = 0; ii < camIDs.size(); ii++)
-		{
-			ImgData imgI;
-			sprintf(Fname, "%s/0/%d.png", Path, camIDs[ii]);
-			imgI.color = imread(Fname, nchannels == 1 ? 0 : 1);
-			if (imgI.color.data == NULL)
-			{
-				printf("Cannot load %s\n", Fname);
-				return 0;
-			}
-			imgI.width = imgI.color.cols, imgI.height = imgI.color.rows, imgI.frameID = camIDs[ii], imgI.nchannels = nchannels;
-			allImgs.push_back(imgI);
-		}
-
-		/*sprintf(Fname, "%s/Corpus/n3dGL.xyz", Path);
-		Corpus CorpusData; ReadCorpusInfo(Fname, CorpusData, scale);
-		float depth[2];
-		ExtractDepthFromCorpus(CorpusData, allCalibInfo[0], 0, depth);*/
-
-		for (int ii = 0; ii < camIDs.size(); ii++)
-			for (int jj = 0; jj < 3; jj++)
-				;// allCalibInfo[ii].rt[jj] = 0; //rotation is not precise, translation is pretty good via bspline of keyframes
-		for (int ii = 1; ii < camIDs.size(); ii++)
-			for (int jj = 0; jj < 3; jj++)
-				;// allCalibInfo[ii].rt[jj + 3] += 0.0025*rand() / RAND_MAX; //approximately 5mm for Micro4 
-
-		for (int cid = 0; cid < (int)allImgs.size(); cid++)
-			allImgs[cid].depth = new float[allImgs[0].width*allImgs[0].height];
-
-		for (int cid = 0; cid < (int)allImgs.size(); cid++)
-			for (int jj = 0; jj < allImgs[cid].height; jj++)
-				for (int ii = 0; ii < allImgs[cid].width; ii++)
-					allImgs[cid].depth[ii + jj*allImgs[cid].width] = 2000;// 9e9;
-
-		DirectAlignment(Path, alignmentParas, allImgs, allCalibInfo, 1, scale);
-
-		visualizationDriver(Path, refF - 19, refF + 19, 1, refF);
-		return 0;
-	}
-	if (mode == 3) //good init but add noise on Sudipta's format
-	{
-		int nchannels = 3;
-		char Path[] = "D:\\Source\\Repos\\Users\\sudipsin\\recon3D\\data\\Micro";
-		vector<ImgData> allImgs;
-		vector<CameraData> allCalibInfo;
-
-		int SynthID = 0;
-		Corpus CorpusData;
-		ReadSynthFile(Path, CorpusData, SynthID);
-
-		vector<int> camIDs; camIDs.push_back(45);
-		//for (int ii = 1; ii <= 15; ii++)
-		//	camIDs.push_back(45 + ii), camIDs.push_back(45 - ii);
-		camIDs.push_back(23), camIDs.push_back(27);
-		camIDs.push_back(18), camIDs.push_back(25);
-
-		for (int ii = 0; ii < camIDs.size(); ii++)
-		{
-			ImgData imgI;
-			sprintf(Fname, "%s/Recon/urd-%03d.png", Path, camIDs[ii]);
-			imgI.color = imread(Fname, nchannels == 1 ? 0 : 1);
-			imgI.width = imgI.color.cols, imgI.height = imgI.color.rows, imgI.nchannels = nchannels;
-			allImgs.push_back(imgI);
-		}
-
-		for (int ii = 0; ii < camIDs.size(); ii++)
-			allCalibInfo.push_back(CorpusData.camera[camIDs[ii]]);
-
-		for (int cid = 0; cid < (int)allImgs.size(); cid++)
-			allImgs[cid].depth = new float[allImgs[0].width*allImgs[0].height];
-
-		ReadSudiptaDepth(Path, allImgs[0], camIDs[0]);
-		ConvertFrontoDepth2LineOfSightDepth(allImgs[0], allCalibInfo[0]);
-
-		/*for (int cid = 0; cid < (int)allImgs.size(); cid++)
-		{
-		int cid = 0;
-		for (int jj = 0; jj < allImgs[cid].height; jj++)
-		for (int ii = 0; ii < allImgs[cid].width; ii++)
-		if (abs(allImgs[cid].depth[ii + jj*allImgs[cid].width]) >0.001)
-		allImgs[cid].depth[ii + jj*allImgs[cid].width] = 9.0*rand() / RAND_MAX - 4.5;
-		}*/
-		//DirectAlignment(Path, allImgs, allCalibInfo);
-	}
-	if (mode == 2) //synth
-	{
-		char Path[] = "D:/Data/DirectBA";
-
-		int nchannels = 3;
-		vector<int> selectedCamID; selectedCamID.push_back(8), selectedCamID.push_back(4), selectedCamID.push_back(12), selectedCamID.push_back(0), selectedCamID.push_back(16);
-
-		Corpus CorpusData;
-		sprintf(Fname, "%s/Corpus/calibInfo.txt", Path);
-		ReadCalibInfo(Fname, CorpusData);
-
-		vector<CameraData> allCalibInfo;
-		for (int ii = 0; ii < (int)selectedCamID.size(); ii++)
-			allCalibInfo.push_back(CorpusData.camera[selectedCamID[ii]]);
-
 		ImgData imgI;
-		vector<ImgData> allImgs;
-		for (int ii = 0; ii < (int)selectedCamID.size(); ii++)
+		sprintf(Fname, "%s/Images/%d.png", Path, allCalibInfo[ii].frameID);
+		imgI.color = imread(Fname, nchannels == 1 ? 0 : 1);
+		if (imgI.color.data == NULL)
 		{
-			sprintf(Fname, "%s/Image/C_%d_1.png", Path, selectedCamID[ii]);
-			imgI.color = imread(Fname, nchannels == 1 ? 0 : 1);
-			imgI.width = imgI.color.cols, imgI.height = imgI.color.rows, imgI.nchannels = nchannels;
-
-			if (ii == 0)
-			{
-				sprintf(Fname, "%s/GT/CD_%d_1.ijz", Path, selectedCamID[ii]);
-				imgI.depth = new float[imgI.width * imgI.height];
-				ReadGridBinary(Fname, imgI.depth, imgI.width, imgI.height);
-			}
-
-			allImgs.push_back(imgI);
+			printf("Cannot load %s\n", Fname);
+			continue;
 		}
+		imgI.width = imgI.color.cols, imgI.height = imgI.color.rows, imgI.frameID = allCalibInfo[ii].frameID, imgI.nchannels = nchannels;
+		allImgs.push_back(imgI);
+	}
 
-		/*for (int cid = 1; cid < (int)allImgs.size(); cid++)
-		{
-		for (int ii = 0; ii < 3; ii++)
-		allCalibInfo[cid].rt[ii] += min(max(gaussian_noise(0, 0.05), -0.15), 0.15);
-		for (int ii = 0; ii < 3; ii++)
-		allCalibInfo[cid].rt[ii + 3] += min(max(gaussian_noise(0, 1.), -3.), 3.);
-		}
-		for (int cid = 0; cid < (int)allImgs.size(); cid++)
-		{
+	InitializeRT(allImgs, allCalibInfo);
+	/*sprintf(Fname, "%s/Corpus/n3dGL.xyz", Path);
+	Corpus CorpusData; ReadCorpusInfo(Fname, CorpusData, scale);
+	float depth[2];
+	ExtractDepthFromCorpus(CorpusData, allCalibInfo[0], 0, depth);*/
+
+	for (int ii = 0; ii < allCalibInfo.size(); ii++)
+		for (int jj = 0; jj < 3; jj++)
+			;// allCalibInfo[ii].rt[jj] = 0; //rotation is not precise, translation is pretty good via bspline of keyframes
+	for (int ii = 1; ii < allCalibInfo.size(); ii++)
+		for (int jj = 0; jj < 3; jj++)
+			;// allCalibInfo[ii].rt[jj + 3] += 0.0025*rand() / RAND_MAX; //approximately 5mm for Micro4 
+
+	for (int cid = 0; cid < (int)allImgs.size(); cid++)
+	{
+		allImgs[cid].validPixels = new bool[allImgs[cid].width*allImgs[cid].height];
+		allImgs[cid].Grad = new float[allImgs[cid].width*allImgs[cid].height];
+		allImgs[cid].InvDepth = new double[allImgs[cid].width*allImgs[cid].height];
+	}
+
+	for (int cid = 0; cid < (int)allImgs.size(); cid++)
 		for (int jj = 0; jj < allImgs[cid].height; jj++)
-		for (int ii = 0; ii < allImgs[cid].width; ii++)
-		{
-		if (allImgs[cid].depth[ii + jj*allImgs[cid].width] < -0.001)
-		;// allImgs[cid].depth[ii + jj*allImgs[cid].width] += min(max(gaussian_noise(0, 0.5), -1.5), 1.5);
-		}
-		}*/
+			for (int ii = 0; ii < allImgs[cid].width; ii++)
+				allImgs[cid].validPixels[ii + jj*allImgs[cid].width] = false, allImgs[cid].Grad[ii + jj*allImgs[cid].width] = 0.0,
+				allImgs[cid].InvDepth[ii + jj*allImgs[cid].width] = 1.0 / min(2.5, max(0.001, gaussian_noise(1.0, 0.5)));
 
-		//DirectAlignment(Path, allImgs, allCalibInfo);
-	}
-	if (mode == 1) //flow based
-	{
-		int nchannels = 3;
-		char Path[] = "D:/Data/Micro3";
-		vector<ImgData> allImgs;
-		vector<CameraData> allCalibInfo;
-
-		int refF = 470;
-		vector<int> camIDs; camIDs.push_back(refF);
-		for (int ii = 1; ii < 20; ii++)
-			camIDs.push_back(refF + ii), camIDs.push_back(refF - ii);
-
-		for (int ii = 0; ii < camIDs.size(); ii++)
-		{
-			ImgData imgI;
-			sprintf(Fname, "%s/0/%d.png", Path, camIDs[ii]);
-			imgI.color = imread(Fname, nchannels == 1 ? 0 : 1);
-			if (imgI.color.data == NULL)
-				continue;
-			imgI.frameID = camIDs[ii], imgI.width = imgI.color.cols, imgI.height = imgI.color.rows, imgI.nchannels = nchannels;
-			allImgs.push_back(imgI);
-		}
-
-		SparseFlowData sfd;
-		ComputeFlowForMicroBA(allImgs, sfd);
-
-		FILE *fp = fopen("C:/temp/x.txt", "w+");
-		fprintf(fp, "%d %d\n", sfd.nfeatures, sfd.nimages);
-		for (int jj = 0; jj < sfd.nfeatures; jj++)
-		{
-			for (int ii = 0; ii < sfd.nimages; ii++)
-				fprintf(fp, "%.4f %.4f ", sfd.flow[jj*sfd.nimages + ii].x, sfd.flow[jj*sfd.nimages + ii].y);
-			fprintf(fp, "\n");
-		}
-		fclose(fp);
-
-		/*int nimages, nfeatures;  float du, dv;
-		FILE *fp = fopen("C:/temp/x.txt", "r");
-		while (fscanf(fp, "%d %d ", &nfeatures, &nimages) != EOF)
-		{
-		sfd.nfeatures = nfeatures, sfd.nimages = nimages;
-		sfd.flow = new Point2f[nfeatures*nimages];
-		for (int jj = 0; jj < sfd.nfeatures; jj++)
-		{
-		for (int ii = 0; ii < sfd.nimages; ii++)
-		{
-		fscanf(fp, "%f %f ", &du, &dv);
-		sfd.flow[jj*sfd.nimages + ii].x = du, sfd.flow[jj*sfd.nimages + ii].y = dv;
-		}
-		}
-		}
-		fclose(fp);*/
-
-		VideoData vInfo;
-		ReadVideoDataI(Path, vInfo, 0, 0, 1800);
-		for (int ii = 0; ii < camIDs.size(); ii++)
-			allCalibInfo.push_back(vInfo.VideoInfo[camIDs[ii]]);
-
-		for (int ii = 0; ii < camIDs.size(); ii++)
-			for (int jj = 0; jj < 3; jj++)
-				allCalibInfo[ii].rt[jj] = 0; //rotation is not precise, translation is pretty good via bspline of keyframes
-
-		double reProjectionSigma = 1.0;
-		FlowBasedBundleAdjustment(Path, allImgs, sfd, allCalibInfo, reProjectionSigma, 0, 0, 1);
-		waitKey(0);
-
-		return 0;
-	}
-	if (mode == 0) //middlebury
-	{
-		double focal = 3968.297, baseline = 236.922, doffs = 77.215;
-
-		CameraData Cam1, Cam2;
-		Cam1.width = 2960, Cam1.height = 1924;
-		Cam2.width = 2960, Cam2.height = 1924;
-		Cam1.intrinsic[0] = focal, Cam1.intrinsic[1] = focal, Cam1.intrinsic[2] = 0.0, Cam1.intrinsic[3] = 1188.925, Cam1.intrinsic[4] = 979.657;
-		Cam2.intrinsic[0] = focal, Cam2.intrinsic[1] = focal, Cam2.intrinsic[2] = 0.0, Cam2.intrinsic[3] = 1266.14, Cam2.intrinsic[4] = 979.657;
-		Cam1.rt[0] = 0, Cam1.rt[1] = 0, Cam1.rt[2] = 0, Cam1.rt[3] = 0, Cam1.rt[4] = 0, Cam1.rt[5] = 0;
-		Cam2.rt[0] = 0.01, Cam2.rt[1] = 0.0, Cam2.rt[2] = 0.0, Cam2.rt[3] = -baseline, Cam2.rt[4] = 0, Cam2.rt[5] = 0;
-
-		GetKFromIntrinsic(Cam1.K, Cam1.intrinsic), GetiK(Cam1.invK, Cam1.K);
-		GetKFromIntrinsic(Cam2.K, Cam2.intrinsic), GetiK(Cam2.invK, Cam2.K);
-
-		GetRTFromrt(Cam1.rt, Cam1.R, Cam1.T), GetCfromT(Cam1.R, Cam1.T, Cam1.C), AssembleRT(Cam1.R, Cam1.T, Cam1.RT);
-		GetRTFromrt(Cam2.rt, Cam2.R, Cam2.T), GetCfromT(Cam2.R, Cam2.T, Cam2.C), AssembleRT(Cam2.R, Cam2.T, Cam2.RT);
-
-		AssembleP(Cam1.K, Cam1.RT, Cam1.P);
-		AssembleP(Cam2.K, Cam2.RT, Cam2.P);
-
-		vector<CameraData> allCalibInfo;
-		allCalibInfo.push_back(Cam1), allCalibInfo.push_back(Cam2);
-
-		ImgData imgI;
-		vector<ImgData> allImgs;
-
-		int nchannels = 1;
-		imgI.color = imread("C:/temp/Pipes-perfect/im0.png", nchannels == 1 ? 0 : 1);
-		imgI.width = imgI.color.cols, imgI.height = imgI.color.rows, imgI.nchannels = nchannels;
-		allImgs.push_back(imgI);
-
-		imgI.color = imread("C:/temp/Pipes-perfect/im1.png", nchannels == 1 ? 0 : 1);
-		imgI.width = imgI.color.cols, imgI.height = imgI.color.rows, imgI.nchannels = nchannels;
-		allImgs.push_back(imgI);
-
-		read_pfm_file("C:/temp/Pipes-perfect/disp0.pfm", allImgs[0]);
-		ConvertDisparirty2DepthMap(allImgs[0], focal, baseline, doffs);
-
-		read_pfm_file("C:/temp/Pipes-perfect/disp1.pfm", allImgs[1]);
-		ConvertDisparirty2DepthMap(allImgs[1], focal, baseline, doffs);
-
-		//DirectAlignment("C:/temp/Pipes-perfect", allImgs, allCalibInfo);
-
-		return 0;
-	}
-
+	sprintf(Fname, "%s/%.3e", Path, regIntraWeight); makeDir(Fname);
+	DirectAlignment(Fname, alignmentParas, allImgs, allCalibInfo, 1, scale);
 
 	return 0;
 }
 
-/*ImgData img;
-img.color = imread("C:/Data/Micro4/0/130.png");
-img.width = img.color.cols, img.nchannels = 3;
-
-cvNamedWindow("Image", CV_WINDOW_NORMAL); setMouseCallback("Image", onMouse);
-Mat weightImg, gray; cvtColor(img.color, gray, CV_BGR2GRAY);
-cvtColor(gray, weightImg, CV_GRAY2BGR);
-
-int hb = 29;
-vector<float> localWeights; localWeights.resize((2 * hb + 1)* (2 * hb + 1));
-bool *mask = new bool[1920 * 1080];
-for (int ii = 0; ii < 1920 * 1080; ii++)
-mask[ii] = true;
-
-int i, j;
-vector<Point2i> ij; ij.reserve(13000);
-FILE *fp = fopen("C:/temp/validIJ.txt", "r");
-while (fscanf(fp, "%d %d", &i, &j) != EOF)
-ij.push_back(Point2i(i, j));
-fclose(fp);
-
-
-for (int ll = 0; ll < (int)ij.size(); ll++)
-{
-ComputeGeodesicWeight(img.color.data, mask, 1920, 3, &localWeights[0], ij[ll].x, ij[ll].y, hb, 10);
-
-cvtColor(gray, weightImg, CV_GRAY2BGR);
-for (int jj = -hb; jj <= hb; jj++)
-for (int ii = -hb; ii <= hb; ii++)
-for (int kk = 0; kk < 3; kk++)
-weightImg.data[(ij[ll].x + ii + (ij[ll].y + jj) * 1920) * 3 + kk] = (uchar)(255.0*localWeights[ii + hb + (jj + hb) * (2 * hb + 1)]);
-
-imshow("Image", weightImg);
-if (waitKey(-1) == 27)
-break;
-}
-
-/*while (true)
-{
-if (waitKey(16) == 27)
-break;
-if (clicked == 1)
-{
-printf("%d %d ", MousePosX, MousePosY);
-ComputeGeodesicWeight(img.color.data, mask, 1920, 3, &localWeights[0], MousePosX, MousePosY, hb);
-
-cvtColor(gray, weightImg, CV_GRAY2BGR);
-for (int jj = -hb; jj <= hb; jj++)
-for (int ii = -hb; ii <= hb; ii++)
-for (int kk = 0; kk < 3; kk++)
-weightImg.data[(MousePosX + ii + (MousePosY + jj) * 1920) * 3 + kk] = (uchar)(255.0*localWeights[ii + hb + (jj + hb) * (2 * hb + 1)]);
-
-imshow("Image", weightImg); waitKey(1);
-clicked = 0;
-}
-}
-return 0;*/
 
 
 

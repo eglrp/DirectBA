@@ -1619,6 +1619,58 @@ void Get_Value_Spline(float *Para, int width, int height, double X, double Y, do
 
 	return;
 }
+
+
+void BuildDataPyramid(int *validPixels, double *InvDepth, float *Grad, vector<int*> &validPixelsPyr, vector<double*> &InvDepthPyr, vector<float*> &gradPyr, int width, int height, int nscales)
+{
+	int upperWidth = width, upperHeight = height;
+	validPixelsPyr.push_back(validPixels); //level 0
+	InvDepthPyr.push_back(InvDepth); //level 0
+	gradPyr.push_back(Grad); //level 0
+
+	for (int sid = 1; sid < nscales + 1; sid++)
+	{
+		int activeWidth = (int)ceil(1.0*upperWidth / 2), activeHeight = (int)ceil(1.0*upperHeight / 2);
+
+		int *ValidDataAtSPlus = validPixelsPyr[sid - 1], *ValidDataAtS = new int[activeWidth*activeHeight];
+		double *DDataAtSPlus = InvDepthPyr[sid - 1], *DDataAtS = new double[activeWidth*activeHeight];
+		float *GDataAtSPlus = gradPyr[sid - 1], *GDataAtS = new float[activeWidth*activeHeight];
+
+		for (int jj = 0; jj < activeHeight; jj++)
+		{
+			for (int ii = 0; ii < activeWidth; ii++)
+			{
+				if (2 * ii + 1 > upperWidth - 1 || 2 * jj + 1>upperHeight - 1)
+					ValidDataAtS[ii + jj*activeWidth] = 0, DDataAtS[ii + jj*activeWidth] = 9e9, GDataAtS[ii + jj*activeWidth] = 0.0;
+				else
+				{
+					int count = 0;
+					ValidDataAtS[ii + jj*activeWidth] = false;
+					if (ValidDataAtSPlus[2 * ii + 2 * jj*upperWidth] || ValidDataAtSPlus[2 * ii + 1 + 2 * jj*upperWidth] || ValidDataAtSPlus[2 * ii + (2 * jj + 1)*upperWidth] || ValidDataAtSPlus[2 * ii + 1 + (2 * jj + 1)*upperWidth])
+						ValidDataAtS[ii + jj*activeWidth] = true;
+
+					if (ValidDataAtSPlus[2 * ii + 2 * jj*upperWidth])
+						DDataAtS[ii + jj*activeWidth] = DDataAtSPlus[2 * ii + (2 * jj)*upperWidth]; //Detph does not get blurred
+					else if (ValidDataAtSPlus[2 * ii + 1 + (2 * jj)*upperWidth])
+						DDataAtS[ii + jj*activeWidth] = DDataAtSPlus[2 * ii + 1 + (2 * jj)*upperWidth]; //Detph does not get blurred
+					else if (ValidDataAtSPlus[2 * ii + (2 * jj + 1)*upperWidth])
+						DDataAtS[ii + jj*activeWidth] = DDataAtSPlus[2 * ii + (2 * jj + 1)*upperWidth]; //Detph does not get blurred
+					else if (ValidDataAtSPlus[2 * ii + 1 + (2 * jj + 1)*upperWidth])
+						DDataAtS[ii + jj*activeWidth] = DDataAtSPlus[2 * ii + 1 + (2 * jj + 1)*upperWidth]; //Detph does not get blurred
+
+					//This is ok because the input is dense
+					GDataAtS[ii + jj*activeWidth] = 0.25*(GDataAtSPlus[2 * ii + 2 * jj*upperWidth] + GDataAtSPlus[2 * ii + 1 + 2 * jj*upperWidth] + GDataAtSPlus[2 * ii + (2 * jj + 1)*upperWidth] + GDataAtSPlus[2 * ii + 1 + (2 * jj + 1)*upperWidth]);
+				}
+			}
+		}
+
+		upperWidth = activeWidth, upperHeight = activeHeight;
+		validPixelsPyr.push_back(ValidDataAtS);
+		InvDepthPyr.push_back(DDataAtS);
+		gradPyr.push_back(GDataAtS);
+	}
+}
+
 void LensCorrectionPoint(Point2d *uv, double *K, double *distortion, int npts)
 {
 	double xcn, ycn;

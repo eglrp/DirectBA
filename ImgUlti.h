@@ -27,8 +27,9 @@
 using namespace cv;
 using namespace std;
 
-template <typename T> void BuildDataPyramid(T *Data, vector<T*> &DataPyr, int width, int height, int nscales, bool discrete = false)
+/*template <typename T> void BuildDataPyramid(T *Data, vector<T*> &DataPyr, int width, int height, int nscales, int type)
 {
+	//0: discrete, 1: depth, 2:grad
 	//down sample by factor of 2 at every scale
 
 	int upperWidth = width, upperHeight = height;
@@ -49,15 +50,27 @@ template <typename T> void BuildDataPyramid(T *Data, vector<T*> &DataPyr, int wi
 					DataAtS[ii + jj*activeWidth] = 0.0;
 				else
 				{
-					if (!discrete)
-						DataAtS[ii + jj*activeWidth] = 0.25*(DataAtSPlus[2 * ii + 2 * jj*upperWidth] + DataAtSPlus[2 * ii + 1 + 2 * jj*upperWidth] +
-						DataAtSPlus[2 * ii + (2 * jj + 1)*upperWidth] + DataAtSPlus[2 * ii + 1 + (2 * jj + 1)*upperWidth]);// DataAtSPlus[2 * ii + 1 + (2 * jj + 1)*upperWidth]; //Detph does not get blurred
-					else
+					if (type == 0)
 					{
 						DataAtS[ii + jj*activeWidth] = false;
 						if (DataAtSPlus[2 * ii + 2 * jj*upperWidth] || DataAtSPlus[2 * ii + 1 + 2 * jj*upperWidth] ||
 							DataAtSPlus[2 * ii + (2 * jj + 1)*upperWidth] || DataAtSPlus[2 * ii + 1 + (2 * jj + 1)*upperWidth])
 							DataAtS[ii + jj*activeWidth] = true;
+					}
+					else if (type == 1)
+					{
+						if (DataAtSPlus[2 * ii + (2 * jj)*upperWidth] > 0)
+							DataAtS[ii + jj*activeWidth] = DataAtSPlus[2 * ii + (2 * jj)*upperWidth]; //Detph does not get blurred
+						else if (DataAtSPlus[2 * ii + 1 + (2 * jj)*upperWidth] > 0)
+							DataAtS[ii + jj*activeWidth] = DataAtSPlus[2 * ii + 1 + (2 * jj)*upperWidth]; //Detph does not get blurred
+						else if (DataAtSPlus[2 * ii + (2 * jj + 1)*upperWidth] > 0)
+							DataAtS[ii + jj*activeWidth] = DataAtSPlus[2 * ii + (2 * jj + 1)*upperWidth]; //Detph does not get blurred
+						else if (DataAtSPlus[2 * ii + 1 + (2 * jj + 1)*upperWidth] > 0)
+							DataAtS[ii + jj*activeWidth] = DataAtSPlus[2 * ii + 1 + (2 * jj + 1)*upperWidth]; //Detph does not get blurred
+					}
+					else
+					{
+						DataAtS[ii + jj*activeWidth] = 0.25*(DataAtSPlus[2 * ii + 2 * jj*upperWidth] + DataAtSPlus[2 * ii + 1 + 2 * jj*upperWidth] + DataAtSPlus[2 * ii + (2 * jj + 1)*upperWidth] + DataAtSPlus[2 * ii + 1 + (2 * jj + 1)*upperWidth]);
 					}
 				}
 			}
@@ -69,7 +82,9 @@ template <typename T> void BuildDataPyramid(T *Data, vector<T*> &DataPyr, int wi
 	}
 
 	return;
-}
+}*/
+
+void BuildDataPyramid(int *validPixels, double *InvDepth, float *Grad, vector<int*> &validPixelsPyr, vector<double*> &InvDepthPyr, vector<float*> &gradPyr, int width, int height, int nscales);
 
 template <typename T> void UpsamleDepth(T *depthIn, T* depthOut, int lowerWidth, int lowerHeight, int upperWidth, int upperHeight)
 {
@@ -93,34 +108,52 @@ template <typename T> void UpsamleDepth(T *depthIn, T* depthOut, int lowerWidth,
 }
 template <typename T> void UpsamleDepthNN(T *depthIn, T* depthOut, int *maskIn, int *maskOut, int upperWidth, int upperHeight, int lowerWidth, int lowerHeight)
 {
-	vector<Point2i> indexList;
+	/*vector<Point2i> indexList;
 	indexList.push_back(Point2i(0, 0));
 	for (int range = 1; range < 3; range++)
-		for (int r = -range; r <= range; r++)
-			for (int c = -range; c <= range; c++)
-				if (abs(r) >= range || abs(c) >= range)
-					indexList.push_back(Point2i(r, c));
+	for (int r = -range; r <= range; r++)
+	for (int c = -range; c <= range; c++)
+	if (abs(r) >= range || abs(c) >= range)
+	indexList.push_back(Point2i(r, c));
 
 	//upsample by factor of 2 at every scale
 	for (int jj = 0; jj < lowerHeight; jj++)
 	{
-		for (int ii = 0; ii < lowerWidth; ii++)
+	for (int ii = 0; ii < lowerWidth; ii++)
+	{
+	if (maskOut[ii + jj*lowerWidth]>0)
+	{
+	bool found = false;
+	int x0 = ii / 2, y0 = jj / 2;
+	for (auto rc : indexList)
+	{
+	if (maskIn[x0 + rc.x + (y0 + rc.y)*upperWidth]>0)
+	{
+	depthOut[ii + jj *lowerWidth] = depthIn[x0 + rc.x + (y0 + rc.y)*upperWidth];
+	found = true;
+	break;
+	}
+	}
+	if (!found)
+	printf("Problem with depth upsampling @: (%d %d)\n", ii, jj);
+	}
+	}
+	}*/
+
+	for (int jj = 0; jj < upperHeight; jj++)
+	{
+		for (int ii = 0; ii < upperWidth; ii++)
 		{
-			if (maskOut[ii + jj*lowerWidth]>0)
+			if (maskIn[ii + jj*upperWidth] >0)
 			{
-				bool found = false;
-				int x0 = ii / 2, y0 = jj / 2;
-				for (auto rc : indexList)
-				{
-					if (maskIn[x0 + rc.x + (y0 + rc.y)*upperWidth]>0)
-					{
-						depthOut[ii + jj *lowerWidth] = depthIn[x0 + rc.x + (y0 + rc.y)*upperWidth];
-						found = true;
-						break;
-					}
-				}
-				if (!found)
-					printf("Problem with depth upsampling @: (%d %d)\n", ii, jj);
+				if (2 * ii < lowerWidth && 2 * jj < lowerHeight)
+					depthOut[2 * ii + 2 * jj *lowerWidth] = depthIn[ii + jj *upperWidth];
+				if (2 * ii + 1 < lowerWidth && 2 * jj < lowerHeight)
+					depthOut[2 * ii + 1 + 2 * jj *lowerWidth] = depthIn[ii + jj *upperWidth];
+				if (2 * ii < lowerWidth && 2 * jj + 1 < lowerHeight)
+					depthOut[2 * ii + (2 * jj + 1)*lowerWidth] = depthIn[ii + jj *upperWidth];
+				if (2 * ii < lowerWidth && 2 * jj < lowerHeight)
+					depthOut[2 * ii + 1 + (2 * jj + 1) *lowerWidth] = depthIn[ii + jj *upperWidth];
 			}
 		}
 	}

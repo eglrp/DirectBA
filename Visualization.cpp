@@ -26,7 +26,7 @@ bool g_bButton1Down = false, drawPointColor = false; int colorCoded = 1;
 bool ReCenterNeeded = false, PickingMode = false, bFullsreen = false, changeBackgroundColor = false, showAxis = false;
 bool SaveScreen = false, ImmediateSnap = false, SaveStaticViewingParameters = false, SetStaticViewingParameters = true, RenderedReady = false;
 
-bool drawCorpusPoints = false, drawCorpusCameras = false, drawNonCorpusPoints = true, drawNonCorpusCameras = true;
+bool drawCorpusPoints = 1, drawCorpusCameras = false, drawNonCorpusPoints = true, drawNonCorpusCameras = true;
 double DisplaystartFrame = 0.0, DisplayTimeStep = 0.01; //60fps
 
 GLfloat PointsCentroid[3], PointVar[3];
@@ -680,7 +680,7 @@ int visualizationDriver(char *inPath, int startF, int stopF, bool hasColor, int 
 	drawPointColor = hasColor;
 	startFrame = startF, stopFrame = stopF;
 
-	UnitScale = 0.002;// sqrt(pow(PointVar[0], 2) + pow(PointVar[1], 2) + pow(PointVar[2], 2)) / 100.0;
+	UnitScale = 0.004;// sqrt(pow(PointVar[0], 2) + pow(PointVar[1], 2) + pow(PointVar[2], 2)) / 100.0;
 	g_coordAxisLength = 20.f*UnitScale, g_fViewDistance = 1000 * UnitScale* VIEWING_DISTANCE_MIN;
 	g_nearPlane = 1.0*UnitScale, g_farPlane = 30000.f * UnitScale;
 	CameraSize = 20.0f*UnitScale, pointSize = 1.0f*UnitScale, normalSize = 5.f*UnitScale, arrowThickness = .1f*UnitScale;
@@ -700,12 +700,12 @@ int visualizationDriver(char *inPath, int startF, int stopF, bool hasColor, int 
 void ReadCurrentSfmGL(char *path, bool drawPointColor)
 {
 	char Fname[200];
-	int viewID;
+	int viewID, id;
 
 	CameraData camI;
 	Corpus CorpusData;
-	sprintf(Fname, "%s/BA_Camera_AllParams_after.txt", path);
-	if (ReadCalibInfo(Fname, CorpusData))
+	sprintf(Fname, "%s/Corpus/BA_Camera_AllParams_after.txt", path);
+	if (ReadCalibInfo(Fname, CorpusData) == 0)
 		for (int ii = 0; ii < CorpusData.nCameras; ii++)
 			g_vis.glCorpusCameraInfo.push_back(CorpusData.camera[ii]);
 
@@ -715,14 +715,14 @@ void ReadCurrentSfmGL(char *path, bool drawPointColor)
 
 	Point3i iColor; Point3f fColor; Point3f t3d;
 	bool filenotvalid = false;
-	sprintf(Fname, "%s/Corpus/n3dGL.txt", path);
+	sprintf(Fname, "%s/Corpus/3dGL.xyz", path);
 	FILE *fp = fopen(Fname, "r");
 	if (fp == NULL)
 	{
 		printf("Cannot load %s\n", Fname);
 		return;
 	}
-	while (fscanf(fp, "%f %f %f ", &t3d.x, &t3d.y, &t3d.z) != EOF)
+	while (fscanf(fp, "%d %f %f %f ", &id, &t3d.x, &t3d.y, &t3d.z) != EOF)
 	{
 		if (drawPointColor)
 		{
@@ -766,13 +766,9 @@ int ReadVideoPoseGL(char *path, int startFrame, int stopFrame)
 
 	int frameID;
 	double rt[6], R[9], T[3], Rgl[16], Cgl[3], dummy[6];
-	sprintf(Fname, "%s/sb_CamPose_0.txt", Path);
+	sprintf(Fname, "%s/CamPose_0.txt", Path);
 	if (IsFileExist(Fname) == 0)
-	{
-		sprintf(Fname, "%s/CamPose_0.txt", Path);
-		if (IsFileExist(Fname) == 0)
 			return 1;
-	}
 	FILE *fp = fopen(Fname, "r");
 
 	for (int jj = 0; jj < stopFrame + 1; jj++)
@@ -780,6 +776,7 @@ int ReadVideoPoseGL(char *path, int startFrame, int stopFrame)
 	while (fscanf(fp, "%d ", &frameID) != EOF)
 	{
 		PoseInfo[frameID].valid = true;
+		PoseInfo[frameID].frameID = frameID;
 		for (int jj = 0; jj < 6; jj++)
 			fscanf(fp, "%lf ", &PoseInfo[frameID].rt[jj]);
 		getRfromr(PoseInfo[frameID].rt, PoseInfo[frameID].R);
