@@ -64,7 +64,7 @@ struct CameraData
 };
 struct DirectAlignPara
 {
-	DirectAlignPara(double dataWeight = 0.8, double anchorWeight= 1e16, double regIntraWeight = 0.2, double regInterWeight = 0.2, double colorSigma = 5.0, double depthSigma = 2.0, double gradientThresh = 10, double lowDepth = 0.5, double highDepth = 10, double reProjectionSigma = 0.5) :
+	DirectAlignPara(double dataWeight = 0.8, double anchorWeight= 1e16, double regIntraWeight = 0.2, double regInterWeight = 0.2, double colorSigma = 5.0, double depthSigma = 2.0, double gradientThresh = 10, double lowDepth = 0, double highDepth = 0, double reProjectionSigma = 0.5) :
 		dataWeight(dataWeight), anchorWeight(anchorWeight), regIntraWeight(regIntraWeight), regInterWeight(regInterWeight), colorSigma(colorSigma), depthSigma(depthSigma), gradientThresh(gradientThresh), lowDepth(lowDepth), highDepth(highDepth), reProjectionSigma(reProjectionSigma){}
 
 	bool removeSmallRegions;
