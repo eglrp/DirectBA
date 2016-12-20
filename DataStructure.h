@@ -39,7 +39,6 @@ struct CameraData
 {
 	CameraData()
 	{
-		scale = 1.0;
 		valid = false;
 		for (int ii = 0; ii < 9; ii++)
 			R[ii] = 0.0, K[ii] = 0.0;
@@ -52,7 +51,6 @@ struct CameraData
 		hasIntrinsicExtrinisc = 0;
 	}
 
-	double scale;
 	vector<double> photometric; //a*I+b
 	double K[9], invK[9], distortion[7], intrinsic[5], P[12], activeIntrinsic[5], activeK[9], activeinvK[9];
 	double RT[12], R[9], invR[9], T[3],  rt[6], wt[6], C[3];
